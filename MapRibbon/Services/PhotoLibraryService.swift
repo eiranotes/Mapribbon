@@ -12,6 +12,20 @@ final class PhotoLibraryService {
     private(set) var isScanning = false
     var errorMessage: String?
 
+    private let screenshotMode: Bool
+
+    init() {
+#if DEBUG
+        screenshotMode = ScreenshotLaunch.isEnabled
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+        }
+#else
+        screenshotMode = false
+#endif
+    }
+
     var canReadLibrary: Bool {
         authorizationStatus == .authorized || authorizationStatus == .limited
     }
@@ -21,10 +35,24 @@ final class PhotoLibraryService {
     }
 
     func refreshAuthorization() {
+#if DEBUG
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+            return
+        }
+#endif
         authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     }
 
     func requestAccess() async {
+#if DEBUG
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+            return
+        }
+#endif
         authorizationStatus = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         if canReadLibrary {
             await scanRecentDays()
@@ -32,6 +60,14 @@ final class PhotoLibraryService {
     }
 
     func scanRecentDays(lookbackDays: Int = 365) async {
+#if DEBUG
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+            isScanning = false
+            return
+        }
+#endif
         refreshAuthorization()
         guard canReadLibrary else {
             daySummaries = []
@@ -105,6 +141,11 @@ final class PhotoImageService {
         contentMode: PHImageContentMode = .aspectFill,
         highQuality: Bool = false
     ) async -> UIImage? {
+#if DEBUG
+        if ScreenshotLaunch.isEnabled {
+            return screenshotThumbnail(identifier: identifier, targetSize: targetSize)
+        }
+#endif
         let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
         guard let asset = fetch.firstObject else { return nil }
 
@@ -140,6 +181,26 @@ final class PhotoImageService {
             }
         }
     }
+
+#if DEBUG
+    private func screenshotThumbnail(identifier: String, targetSize: CGSize) -> UIImage {
+        let palette = [
+            UIColor(red: 0.43, green: 0.65, blue: 0.56, alpha: 1),
+            UIColor(red: 0.76, green: 0.52, blue: 0.39, alpha: 1),
+            UIColor(red: 0.40, green: 0.55, blue: 0.71, alpha: 1),
+            UIColor(red: 0.88, green: 0.56, blue: 0.39, alpha: 1),
+            UIColor(red: 0.55, green: 0.47, blue: 0.68, alpha: 1)
+        ]
+        let checksum = identifier.utf8.reduce(0) { partial, byte in
+            (partial + Int(byte)) % palette.count
+        }
+        let size = CGSize(
+            width: max(1, targetSize.width),
+            height: max(1, targetSize.height)
+        )
+        return UIImage.solid(color: palette[checksum], size: size)
+    }
+#endif
 }
 
 @MainActor

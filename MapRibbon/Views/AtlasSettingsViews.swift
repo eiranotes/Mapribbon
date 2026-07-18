@@ -174,6 +174,7 @@ struct SettingsView: View {
                     Button("전체 기능 잠금 해제") { showingPaywall = true }
                 }
                 Button("구매 복원") { Task { await store.restore() } }
+                    .disabled(store.isLoading)
             }
 
             Section("개인정보") {
@@ -229,6 +230,7 @@ struct PaywallView: View {
                         .background(MRColor.secondarySurface)
                         .clipShape(Circle())
                 }
+                .accessibilityLabel("닫기")
             }
 
             Image(systemName: "map.fill")
@@ -264,23 +266,40 @@ struct PaywallView: View {
                 }
             } label: {
                 if store.isLoading {
-                    ProgressView().tint(.white)
-                } else {
-                    if let price = store.lifetimeProduct?.displayPrice {
+                    ProgressView().tint(MRColor.paper)
+                } else if let price = store.lifetimeProduct?.displayPrice {
                     Text("영구 잠금 해제 · \(price)")
                 } else {
                     Text("영구 잠금 해제")
                 }
-                }
             }
             .buttonStyle(MRPrimaryButtonStyle())
+            .disabled(store.isLoading)
 
-            Button("구매 복원") { Task { await store.restore() } }
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(MRColor.secondaryText)
+            Button("구매 복원") {
+                Task {
+                    await store.restore()
+                    if store.isUnlocked {
+                        dismiss()
+                    } else if store.errorMessage == nil {
+                        store.errorMessage = "복원할 구매 내역을 찾지 못했습니다."
+                    }
+                }
+            }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundStyle(MRColor.secondaryText)
+            .disabled(store.isLoading)
         }
         .padding(24)
         .background(MRColor.background)
+        .alert("MapRibbon", isPresented: Binding(
+            get: { store.errorMessage != nil },
+            set: { if !$0 { store.errorMessage = nil } }
+        )) {
+            Button("확인", role: .cancel) { store.errorMessage = nil }
+        } message: {
+            Text(store.errorMessage ?? "")
+        }
     }
 }
 

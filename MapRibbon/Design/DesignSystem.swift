@@ -13,19 +13,30 @@ extension Color {
     }
 }
 
+/// Four source colors define the entire application palette. Semantic colors below
+/// are derived only by opacity so screens do not introduce unrelated hues.
+enum MRCorePalette {
+    static let canvas = Color(hex: 0xF1EEE7)
+    static let paper = Color(hex: 0xFFFCF5)
+    static let ink = Color(hex: 0x26231F)
+    static let accent = Color(hex: 0xC95643)
+}
+
 enum MRColor {
-    static let background = Color(hex: 0xF7F7F5)
-    static let surface = Color.white
-    static let secondarySurface = Color(hex: 0xF0F0EC)
-    static let primaryText = Color(hex: 0x171815)
-    static let secondaryText = Color(hex: 0x6D6F68)
-    static let border = Color(hex: 0xDFE0DA)
-    static let accent = Color(hex: 0xE86652)
-    static let accentSoft = Color(hex: 0xF7E3DE)
-    static let success = Color(hex: 0x3C7A57)
-    static let warning = Color(hex: 0xA46B23)
-    static let paper = Color(hex: 0xF4EFE5)
-    static let ink = Color(hex: 0x26241F)
+    static let background = MRCorePalette.canvas
+    static let surface = MRCorePalette.paper
+    static let secondarySurface = MRCorePalette.ink.opacity(0.055)
+    static let primaryText = MRCorePalette.ink
+    static let secondaryText = MRCorePalette.ink.opacity(0.62)
+    static let border = MRCorePalette.ink.opacity(0.14)
+    static let accent = MRCorePalette.accent
+    static let accentSoft = MRCorePalette.accent.opacity(0.12)
+    static let success = MRCorePalette.ink.opacity(0.74)
+    static let warning = MRCorePalette.accent
+    static let paper = MRCorePalette.paper
+    static let ink = MRCorePalette.ink
+    static let cork = MRCorePalette.ink.opacity(0.17)
+    static let threadShadow = MRCorePalette.ink.opacity(0.24)
 }
 
 enum MRSpacing {
@@ -45,9 +56,9 @@ struct MRCardModifier: ViewModifier {
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(MRColor.border.opacity(0.8), lineWidth: 1)
+                    .stroke(MRColor.border, lineWidth: 1)
             }
-            .shadow(color: Color.black.opacity(0.045), radius: 10, y: 4)
+            .shadow(color: MRColor.ink.opacity(0.045), radius: 10, y: 4)
     }
 }
 
@@ -61,7 +72,7 @@ struct MRPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(MRColor.paper)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(MRColor.accent.opacity(configuration.isPressed ? 0.78 : 1))
@@ -84,6 +95,20 @@ struct MRSecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(MRColor.border, lineWidth: 1)
             }
+    }
+}
+
+struct MRCircularAddButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 25, weight: .regular))
+            .foregroundStyle(MRColor.paper)
+            .frame(width: 58, height: 58)
+            .background(MRColor.accent.opacity(configuration.isPressed ? 0.80 : 1))
+            .clipShape(Circle())
+            .shadow(color: MRColor.ink.opacity(0.16), radius: 9, y: 5)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1)
+            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
 
@@ -125,14 +150,10 @@ struct MRStatusBadge: View {
 struct MRPhotoPlaceholder: View {
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: 0xDCE9EA), Color(hex: 0xF2E3D5)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+            MRColor.secondarySurface
             Image(systemName: "photo")
                 .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
+                .foregroundStyle(MRColor.secondaryText)
         }
     }
 }

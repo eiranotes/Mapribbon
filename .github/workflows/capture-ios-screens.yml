@@ -1,0 +1,230 @@
+name: Capture iOS Screens
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/ios-screen-captures
+    paths:
+      - "MapRibbon/**"
+      - "MapRibbonTests/**"
+      - "MapRibbon.xcodeproj/**"
+      - ".github/workflows/capture-ios-screens.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "MapRibbon/**"
+      - "MapRibbonTests/**"
+      - "MapRibbon.xcodeproj/**"
+      - ".github/workflows/capture-ios-screens.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mapribbon-ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Test, build, and capture screens
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode environment
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun simctl list runtimes
+
+      - name: Select and boot iPhone simulator
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import shlex
+          import subprocess
+
+          data = json.loads(subprocess.check_output([
+              "xcrun", "simctl", "list", "devices", "available", "--json"
+          ]))
+          devices = []
+          for runtime, runtime_devices in data.get("devices", {}).items():
+              for device in runtime_devices:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      devices.append((runtime, device))
+
+          preferred_names = [
+              "iPhone 17 Pro",
+              "iPhone 17",
+              "iPhone 16 Pro",
+              "iPhone 16",
+              "iPhone 15 Pro",
+              "iPhone 15",
+          ]
+          selected = None
+          for name in preferred_names:
+              selected = next((item for item in devices if item[1].get("name") == name), None)
+              if selected:
+                  break
+          if selected is None and devices:
+              selected = devices[0]
+          if selected is None:
+              raise SystemExit("No available iPhone simulator found")
+
+          runtime, device = selected
+          values = {
+              "SIMULATOR_UDID": device["udid"],
+              "SIMULATOR_NAME": device["name"],
+              "SIMULATOR_RUNTIME": runtime,
+          }
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              for key, value in values.items():
+                  env.write(f"{key}={value}\n")
+          local_env = os.path.join(os.environ["RUNNER_TEMP"], "simulator.env")
+          with open(local_env, "w", encoding="utf-8") as env:
+              for key, value in values.items():
+                  env.write(f"export {key}={shlex.quote(value)}\n")
+          print(f"Selected {device['name']} ({runtime}) {device['udid']}")
+          PY
+
+          source "$RUNNER_TEMP/simulator.env"
+          xcrun simctl boot "$SIMULATOR_UDID" || true
+          open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_UDID" || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          xcrun simctl ui "$SIMULATOR_UDID" appearance light
+          xcrun simctl status_bar "$SIMULATOR_UDID" override \
+            --time "9:41" \
+            --batteryState charged \
+            --batteryLevel 100 \
+            --wifiBars 3 \
+            --cellularBars 4 || true
+
+      - name: Run unit and mutation tests
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$RUNNER_TEMP/test-results"
+          xcodebuild \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/MapRibbonDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/test-results/MapRibbonTests.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            test | tee "$RUNNER_TEMP/test-results/xcodebuild-test.log"
+
+      - name: Install app and grant photo access
+        shell: bash
+        run: |
+          APP_PATH="$RUNNER_TEMP/MapRibbonDerivedData/Build/Products/Debug-iphonesimulator/MapRibbon.app"
+          test -d "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+          xcrun simctl privacy "$SIMULATOR_UDID" grant photos com.eiraworks.MapRibbon
+
+      - name: Capture all screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p screenshots
+
+          routes=(
+            "01-onboarding:onboarding"
+            "02-permission:permission"
+            "03-boards:boards"
+            "04-date-selection:dates"
+            "05-generation:generation"
+            "06-board-editor:editor"
+            "07-place-manager:places"
+            "08-place-editor:place-editor"
+            "09-export:export"
+            "10-saved-board:saved-board"
+            "11-atlas:atlas"
+            "12-settings:settings"
+            "13-paywall:paywall"
+          )
+
+          for entry in "${routes[@]}"; do
+            filename="${entry%%:*}"
+            route="${entry#*:}"
+            echo "Capturing $route"
+            xcrun simctl terminate "$SIMULATOR_UDID" com.eiraworks.MapRibbon || true
+            sleep 1
+            xcrun simctl launch --terminate-running-process \
+              "$SIMULATOR_UDID" \
+              com.eiraworks.MapRibbon \
+              --args \
+              -AppleLanguages '(ko)' \
+              -AppleLocale ko_KR \
+              --screenshot-route "$route"
+            delay=5
+            if [[ "$route" == "dates" ]]; then
+              delay=12
+            fi
+            sleep "$delay"
+            xcrun simctl io "$SIMULATOR_UDID" screenshot --type=png "screenshots/$filename.png"
+          done
+
+          cat > screenshots/README.md <<EOF2
+          # MapRibbon iOS screen captures
+
+          - Commit: $GITHUB_SHA
+          - Simulator: $SIMULATOR_NAME
+          - Runtime: $SIMULATOR_RUNTIME
+          - Locale: ko_KR
+          - Appearance: light
+          - Captured by: .github/workflows/capture-ios-screens.yml
+          EOF2
+
+          ls -lh screenshots
+
+      - name: Validate screenshot artifact set
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=13
+          actual=$(find screenshots -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')
+          [[ "$actual" == "$expected" ]] || {
+            echo "Expected $expected screenshots, found $actual"
+            exit 1
+          }
+
+          for file in screenshots/*.png; do
+            bytes=$(stat -f%z "$file")
+            [[ "$bytes" -gt 50000 ]] || {
+              echo "$file is unexpectedly small: $bytes bytes"
+              exit 1
+            }
+            width=$(sips -g pixelWidth "$file" | awk '/pixelWidth/ {print $2}')
+            height=$(sips -g pixelHeight "$file" | awk '/pixelHeight/ {print $2}')
+            [[ "$width" -ge 1000 && "$height" -ge 2000 ]] || {
+              echo "$file has unexpected dimensions: ${width}x${height}"
+              exit 1
+            }
+          done
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-ios-screens-${{ github.sha }}
+          path: screenshots
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload test results and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-ios-validation-${{ github.sha }}
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: warn
+          retention-days: 14
