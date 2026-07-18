@@ -1,0 +1,167 @@
+name: Capture iOS Screens
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/ios-screen-captures
+    paths:
+      - "MapRibbon/**"
+      - "MapRibbon.xcodeproj/**"
+      - ".github/workflows/capture-ios-screens.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: Build and capture screens
+    runs-on: macos-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Xcode environment
+        run: |
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Select and boot iPhone simulator
+        shell: bash
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import subprocess
+
+          data = json.loads(subprocess.check_output([
+              "xcrun", "simctl", "list", "devices", "available", "--json"
+          ]))
+          devices = []
+          for runtime, runtime_devices in data.get("devices", {}).items():
+              for device in runtime_devices:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      devices.append((runtime, device))
+
+          preferred_names = [
+              "iPhone 17 Pro",
+              "iPhone 17",
+              "iPhone 16 Pro",
+              "iPhone 16",
+              "iPhone 15 Pro",
+              "iPhone 15",
+          ]
+          selected = None
+          for name in preferred_names:
+              selected = next((item for item in devices if item[1].get("name") == name), None)
+              if selected:
+                  break
+          if selected is None and devices:
+              selected = devices[0]
+          if selected is None:
+              raise SystemExit("No available iPhone simulator found")
+
+          runtime, device = selected
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
+              env.write(f"SIMULATOR_UDID={device['udid']}\n")
+              env.write(f"SIMULATOR_NAME={device['name']}\n")
+              env.write(f"SIMULATOR_RUNTIME={runtime}\n")
+          print(f"Selected {device['name']} ({runtime}) {device['udid']}")
+          PY
+
+          xcrun simctl boot "$SIMULATOR_UDID" || true
+          open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_UDID" || true
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          xcrun simctl status_bar "$SIMULATOR_UDID" override \
+            --time "9:41" \
+            --batteryState charged \
+            --batteryLevel 100 \
+            --wifiBars 3 \
+            --cellularBars 4 || true
+
+      - name: Build MapRibbon for simulator
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
+            -derivedDataPath "$RUNNER_TEMP/MapRibbonDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            build | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Install app
+        shell: bash
+        run: |
+          APP_PATH="$RUNNER_TEMP/MapRibbonDerivedData/Build/Products/Debug-iphonesimulator/MapRibbon.app"
+          test -d "$APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+          xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+
+      - name: Capture all screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p screenshots
+
+          routes=(
+            "01-onboarding:onboarding"
+            "02-permission:permission"
+            "03-boards:boards"
+            "04-date-selection:dates"
+            "05-generation:generation"
+            "06-board-editor:editor"
+            "07-place-manager:places"
+            "08-place-editor:place-editor"
+            "09-export:export"
+            "10-saved-board:saved-board"
+            "11-atlas:atlas"
+            "12-settings:settings"
+            "13-paywall:paywall"
+          )
+
+          for entry in "${routes[@]}"; do
+            filename="${entry%%:*}"
+            route="${entry#*:}"
+            echo "Capturing $route"
+            xcrun simctl terminate "$SIMULATOR_UDID" com.eiraworks.MapRibbon || true
+            xcrun simctl launch --terminate-running-process \
+              "$SIMULATOR_UDID" \
+              com.eiraworks.MapRibbon \
+              --screenshot-route "$route"
+            sleep 3
+            xcrun simctl io "$SIMULATOR_UDID" screenshot --type=png "screenshots/$filename.png"
+          done
+
+          cat > screenshots/README.md <<EOF
+          # MapRibbon iOS screen captures
+
+          - Commit: $GITHUB_SHA
+          - Simulator: $SIMULATOR_NAME
+          - Runtime: $SIMULATOR_RUNTIME
+          - Captured by: .github/workflows/capture-ios-screens.yml
+          EOF
+
+          ls -lh screenshots
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-ios-screens-${{ github.sha }}
+          path: screenshots
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-xcodebuild-log-${{ github.sha }}
+          path: ${{ runner.temp }}/xcodebuild.log
+          if-no-files-found: ignore
+          retention-days: 14
