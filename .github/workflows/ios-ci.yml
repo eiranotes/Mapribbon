@@ -166,3 +166,6 @@ jobs:
             test-summary.json
             TestResults.xcresult
             Screenshots/*.png
+            MapRibbon/**/*.swift
+            MapRibbonTests/**/*.swift
+            MapRibbon.xcodeproj/project.pbxproj
