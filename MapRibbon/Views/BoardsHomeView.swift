@@ -27,7 +27,7 @@ struct BoardsHomeView: View {
                 Button {
                     showingAllDates = true
                 } label: {
-                    Label("새 보드 만들기", systemImage: "plus")
+                    Label("새 핀보드 만들기", systemImage: "plus")
                 }
                 .buttonStyle(MRPrimaryButtonStyle())
                 .disabled(!photoLibrary.canReadLibrary)
@@ -70,7 +70,7 @@ struct BoardsHomeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("보드")
                     .font(.system(size: 30, weight: .bold))
-                Text("여행한 하루를 한 장으로 남겨요")
+                Text("사진을 골라 하루의 장소를 한 장으로 엮어요")
                     .font(.system(size: 14))
                     .foregroundStyle(MRColor.secondaryText)
             }
@@ -87,7 +87,7 @@ struct BoardsHomeView: View {
                 .foregroundStyle(MRColor.accent)
             Text("사진 접근이 필요합니다")
                 .font(.system(size: 20, weight: .bold))
-            Text("위치가 포함된 사진의 날짜와 장소를 읽어 자동 보드를 만듭니다.")
+            Text("위치가 포함된 사진의 날짜와 장소를 읽어 자동 핀보드를 만듭니다.")
                 .font(.system(size: 14))
                 .foregroundStyle(MRColor.secondaryText)
             Button("사진 접근 허용") {
@@ -120,7 +120,7 @@ struct BoardsHomeView: View {
         } label: {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    MRStatusBadge(text: "추천", symbol: "sparkles")
+                    MRStatusBadge(text: "최근 여행일", symbol: "sparkles")
                     Spacer()
                     Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))
@@ -139,7 +139,7 @@ struct BoardsHomeView: View {
                         Text("사진 \(summary.photoCount)장 · 약 \(summary.estimatedPlaceCount)곳")
                             .font(.system(size: 14))
                             .foregroundStyle(MRColor.secondaryText)
-                        Text("이 날짜로 바로 만들기")
+                        Text("사진을 확인하고 만들기")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(MRColor.accent)
                     }
@@ -148,7 +148,7 @@ struct BoardsHomeView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(MRPressableCardStyle())
         .mrCard()
     }
 
@@ -169,7 +169,7 @@ struct BoardsHomeView: View {
 
     private var recentBoards: some View {
         VStack(spacing: 14) {
-            MRSectionHeader(title: "최근 보드", subtitle: "저장한 여행 보드")
+            MRSectionHeader(title: "최근 보드", subtitle: "저장한 여행 핀보드")
             ForEach(boards.prefix(6)) { board in
                 NavigationLink {
                     SavedBoardDetailView(board: board)
@@ -201,7 +201,7 @@ struct BoardsHomeView: View {
                     }
                     .mrCard(padding: 12)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(MRPressableCardStyle())
             }
         }
     }
