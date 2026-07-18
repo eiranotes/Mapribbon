@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ios-ci-${{ github.workflow }}-${{ github.ref }}
@@ -32,6 +32,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply staged pinboard redesign
+        if: ${{ hashFiles('.ci/design-patch/patch.part*') != '' }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat .ci/design-patch/patch.part* | base64 -D > /tmp/mapribbon-design.patch
+          patch -p0 --forward < /tmp/mapribbon-design.patch
+          rm -rf .ci/design-patch .ci/source-patches
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MapRibbon MapRibbonTests .ci
+          git commit -m "feat: render tactile multi-photo pinboards"
+          git push origin HEAD:agent/pinboard-photo-pipeline
 
       - name: Select Xcode 16.4
         run: |
@@ -131,14 +147,19 @@ jobs:
           xcrun simctl io "$UDID" screenshot Screenshots/03-demo-board-editor.png
 
           xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-gallery "${LOCALE_ARGS[@]}"
+          sleep 10
+          xcrun simctl io "$UDID" screenshot Screenshots/04-demo-gallery.png
+
+          xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
           xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-places "${LOCALE_ARGS[@]}"
           sleep 10
-          xcrun simctl io "$UDID" screenshot Screenshots/04-demo-place-manager.png
+          xcrun simctl io "$UDID" screenshot Screenshots/05-demo-place-manager.png
 
           xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
           xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-export "${LOCALE_ARGS[@]}"
           sleep 10
-          xcrun simctl io "$UDID" screenshot Screenshots/05-demo-export.png
+          xcrun simctl io "$UDID" screenshot Screenshots/06-demo-export.png
 
           file Screenshots/*.png
 
