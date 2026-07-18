@@ -148,11 +148,16 @@ jobs:
             route="${entry#*:}"
             echo "Capturing $route"
             xcrun simctl terminate "$SIMULATOR_UDID" com.eiraworks.MapRibbon || true
+            sleep 1
             xcrun simctl launch --terminate-running-process \
               "$SIMULATOR_UDID" \
               com.eiraworks.MapRibbon \
               --screenshot-route "$route"
-            sleep 5
+            delay=5
+            if [[ "$route" == "dates" ]]; then
+              delay=12
+            fi
+            sleep "$delay"
             xcrun simctl io "$SIMULATOR_UDID" screenshot --type=png "screenshots/$filename.png"
           done
 
