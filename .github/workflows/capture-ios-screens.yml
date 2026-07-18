@@ -41,6 +41,7 @@ jobs:
           python3 <<'PY'
           import json
           import os
+          import shlex
           import subprocess
 
           data = json.loads(subprocess.check_output([
@@ -71,13 +72,22 @@ jobs:
               raise SystemExit("No available iPhone simulator found")
 
           runtime, device = selected
+          values = {
+              "SIMULATOR_UDID": device["udid"],
+              "SIMULATOR_NAME": device["name"],
+              "SIMULATOR_RUNTIME": runtime,
+          }
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env:
-              env.write(f"SIMULATOR_UDID={device['udid']}\n")
-              env.write(f"SIMULATOR_NAME={device['name']}\n")
-              env.write(f"SIMULATOR_RUNTIME={runtime}\n")
+              for key, value in values.items():
+                  env.write(f"{key}={value}\n")
+          local_env = os.path.join(os.environ["RUNNER_TEMP"], "simulator.env")
+          with open(local_env, "w", encoding="utf-8") as env:
+              for key, value in values.items():
+                  env.write(f"export {key}={shlex.quote(value)}\n")
           print(f"Selected {device['name']} ({runtime}) {device['udid']}")
           PY
 
+          source "$RUNNER_TEMP/simulator.env"
           xcrun simctl boot "$SIMULATOR_UDID" || true
           open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_UDID" || true
           xcrun simctl bootstatus "$SIMULATOR_UDID" -b
