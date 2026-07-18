@@ -21,6 +21,28 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertEqual(PhotoClusterer.cluster(assets).count, 2)
     }
 
+    func testSameLocationAfterLongGapRemainsARevisit() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let assets = [
+            make(id: "hotel-morning", date: start, latitude: 35.6812, longitude: 139.7671),
+            make(id: "museum", date: start.addingTimeInterval(2 * 3_600), latitude: 35.7148, longitude: 139.7967),
+            make(id: "hotel-night", date: start.addingTimeInterval(9 * 3_600), latitude: 35.6813, longitude: 139.7670)
+        ]
+        let clusters = PhotoClusterer.cluster(assets)
+        XCTAssertEqual(clusters.count, 3)
+        XCTAssertEqual(clusters.first?.assets.first?.id, "hotel-morning")
+        XCTAssertEqual(clusters.last?.assets.first?.id, "hotel-night")
+    }
+
+    func testSameLocationWithinShortContinuousVisitMerges() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let assets = [
+            make(id: "a", date: start, latitude: 35.6812, longitude: 139.7671),
+            make(id: "b", date: start.addingTimeInterval(50 * 60), latitude: 35.6813, longitude: 139.7670)
+        ]
+        XCTAssertEqual(PhotoClusterer.cluster(assets).count, 1)
+    }
+
     private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {
         PhotoAssetSnapshot(
             id: id,
