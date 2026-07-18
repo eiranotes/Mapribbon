@@ -16,9 +16,9 @@ concurrency:
 
 jobs:
   build-and-test:
-    name: Build and test (Xcode 16.4)
+    name: Build, test and capture (Xcode 16.4)
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     env:
       PROJECT: MapRibbon.xcodeproj
@@ -26,6 +26,8 @@ jobs:
       CONFIGURATION: Debug
       DERIVED_DATA: ${{ github.workspace }}/DerivedData
       RESULT_BUNDLE: ${{ github.workspace }}/TestResults.xcresult
+      APP_BUNDLE_ID: com.eiraworks.MapRibbon
+      APP_PATH: ${{ github.workspace }}/DerivedData/Build/Products/Debug-iphonesimulator/MapRibbon.app
 
     steps:
       - name: Checkout
@@ -96,6 +98,38 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             test | tee test.log | xcbeautify
 
+      - name: Capture simulator screenshots
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          mkdir -p Screenshots
+
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light
+          xcrun simctl status_bar "$UDID" override \
+            --time 9:41 \
+            --batteryState charged \
+            --batteryLevel 100 \
+            --wifiBars 3 \
+            --cellularBars 4
+
+          test -d "$APP_PATH"
+          xcrun simctl install "$UDID" "$APP_PATH"
+
+          xcrun simctl spawn "$UDID" defaults delete "$APP_BUNDLE_ID" hasCompletedOnboarding 2>/dev/null || true
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$UDID" screenshot Screenshots/01-onboarding.png
+
+          xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
+          xcrun simctl spawn "$UDID" defaults write "$APP_BUNDLE_ID" hasCompletedOnboarding -bool true
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID"
+          sleep 4
+          xcrun simctl io "$UDID" screenshot Screenshots/02-home.png
+
+          file Screenshots/*.png
+
       - name: Summarize test result
         if: always()
         run: |
@@ -106,7 +140,7 @@ jobs:
             cat test-summary.json || true
           fi
 
-      - name: Upload CI diagnostics
+      - name: Upload CI diagnostics and screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -119,3 +153,4 @@ jobs:
             test.log
             test-summary.json
             TestResults.xcresult
+            Screenshots/*.png
