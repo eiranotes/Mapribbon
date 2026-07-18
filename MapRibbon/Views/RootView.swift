@@ -266,7 +266,7 @@ enum ScreenshotFixtures {
                     id: placeIDs[index],
                     title: names[index],
                     subtitle: subtitles[index],
-                    administrativeArea: index == 3 ? "서울특별시" : "서울특별시",
+                    administrativeArea: "서울특별시",
                     locality: names[index],
                     latitude: coordinates[index].0,
                     longitude: coordinates[index].1,
@@ -318,9 +318,11 @@ enum ScreenshotFixtures {
             "[\"강원\",\"충북\"]"
         ]
         let titles = ["서울의 봄날 산책", "부산 바다 하루", "제주 동쪽 드라이브", "강원 숲과 호수"]
+        var boards: [SavedBoard] = []
+        boards.reserveCapacity(titles.count)
 
-        return titles.indices.map { index in
-            SavedBoard(
+        for index in titles.indices {
+            let board = SavedBoard(
                 date: fixedDate.addingTimeInterval(Double(-index) * 86_400 * 10),
                 createdAt: fixedDate.addingTimeInterval(Double(-index) * 3_600),
                 title: titles[index],
@@ -331,7 +333,9 @@ enum ScreenshotFixtures {
                 payloadData: Data("{}".utf8),
                 regionKeysJSON: regions[index]
             )
+            boards.append(board)
         }
+        return boards
     }
 
     private static func makeSummary(
@@ -340,19 +344,28 @@ enum ScreenshotFixtures {
         cityLongitude: Double,
         count: Int
     ) -> PhotoDaySummary {
-        let date = Calendar(identifier: .gregorian).date(byAdding: .day, value: dayOffset, to: fixedDate) ?? fixedDate
-        let assets = (0..<count).map { index in
-            PhotoAssetSnapshot(
+        let calendar = Calendar(identifier: .gregorian)
+        let date = calendar.date(byAdding: .day, value: dayOffset, to: fixedDate) ?? fixedDate
+        var assets: [PhotoAssetSnapshot] = []
+        assets.reserveCapacity(count)
+
+        for index in 0..<count {
+            let creationDate = date.addingTimeInterval(Double(index) * 1_100)
+            let latitudeOffset = Double(index % 4) * 0.007
+            let longitudeOffset = Double(index % 3) * 0.008
+            let asset = PhotoAssetSnapshot(
                 id: "summary-\(dayOffset)-\(index)",
-                creationDate: date.addingTimeInterval(Double(index) * 1_100),
-                latitude: cityLatitude + Double(index % 4) * 0.007,
-                longitude: cityLongitude + Double(index % 3) * 0.008,
+                creationDate: creationDate,
+                latitude: cityLatitude + latitudeOffset,
+                longitude: cityLongitude + longitudeOffset,
                 pixelWidth: 4_032,
                 pixelHeight: 3_024,
                 isFavorite: index == 0,
                 isScreenshot: false
             )
+            assets.append(asset)
         }
+
         return PhotoDaySummary(date: date, assets: assets)
     }
 
