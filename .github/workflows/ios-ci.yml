@@ -43,7 +43,7 @@ jobs:
           git checkout -B agent/pinboard-photo-pipeline origin/agent/pinboard-photo-pipeline
           : > /tmp/mapribbon-design.patch
           for part in $(find .ci/design-patch -name 'patch.part*' | sort); do
-            base64 -D "$part" >> /tmp/mapribbon-design.patch
+            base64 -D < "$part" >> /tmp/mapribbon-design.patch
           done
           patch -p0 --forward < /tmp/mapribbon-design.patch
           rm -rf .ci/design-patch .ci/source-patches
