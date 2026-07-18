@@ -7,6 +7,7 @@ on:
       - agent/ios-screen-captures
     paths:
       - "MapRibbon/**"
+      - "MapRibbonTests/**"
       - "MapRibbon.xcodeproj/**"
       - ".github/workflows/capture-ios-screens.yml"
   pull_request:
@@ -14,17 +15,22 @@ on:
       - main
     paths:
       - "MapRibbon/**"
+      - "MapRibbonTests/**"
       - "MapRibbon.xcodeproj/**"
       - ".github/workflows/capture-ios-screens.yml"
 
 permissions:
   contents: read
 
+concurrency:
+  group: mapribbon-ios-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  capture:
-    name: Build and capture screens
+  validate:
+    name: Test, build, and capture screens
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Check out repository
@@ -33,6 +39,7 @@ jobs:
       - name: Show Xcode environment
         run: |
           xcodebuild -version
+          xcodebuild -showsdks
           xcrun simctl list runtimes
 
       - name: Select and boot iPhone simulator
@@ -91,6 +98,7 @@ jobs:
           xcrun simctl boot "$SIMULATOR_UDID" || true
           open -a Simulator --args -CurrentDeviceUDID "$SIMULATOR_UDID" || true
           xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          xcrun simctl ui "$SIMULATOR_UDID" appearance light
           xcrun simctl status_bar "$SIMULATOR_UDID" override \
             --time "9:41" \
             --batteryState charged \
@@ -98,19 +106,20 @@ jobs:
             --wifiBars 3 \
             --cellularBars 4 || true
 
-      - name: Build MapRibbon for simulator
+      - name: Run unit and mutation tests
         shell: bash
         run: |
           set -o pipefail
+          mkdir -p "$RUNNER_TEMP/test-results"
           xcodebuild \
             -project MapRibbon.xcodeproj \
             -scheme MapRibbon \
             -configuration Debug \
-            -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$SIMULATOR_UDID" \
             -derivedDataPath "$RUNNER_TEMP/MapRibbonDerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/test-results/MapRibbonTests.xcresult" \
             CODE_SIGNING_ALLOWED=NO \
-            build | tee "$RUNNER_TEMP/xcodebuild.log"
+            test | tee "$RUNNER_TEMP/test-results/xcodebuild-test.log"
 
       - name: Install app and grant photo access
         shell: bash
@@ -152,6 +161,9 @@ jobs:
             xcrun simctl launch --terminate-running-process \
               "$SIMULATOR_UDID" \
               com.eiraworks.MapRibbon \
+              --args \
+              -AppleLanguages '(ko)' \
+              -AppleLocale ko_KR \
               --screenshot-route "$route"
             delay=5
             if [[ "$route" == "dates" ]]; then
@@ -161,30 +173,58 @@ jobs:
             xcrun simctl io "$SIMULATOR_UDID" screenshot --type=png "screenshots/$filename.png"
           done
 
-          cat > screenshots/README.md <<EOF
+          cat > screenshots/README.md <<EOF2
           # MapRibbon iOS screen captures
 
           - Commit: $GITHUB_SHA
           - Simulator: $SIMULATOR_NAME
           - Runtime: $SIMULATOR_RUNTIME
+          - Locale: ko_KR
+          - Appearance: light
           - Captured by: .github/workflows/capture-ios-screens.yml
-          EOF
+          EOF2
 
           ls -lh screenshots
 
+      - name: Validate screenshot artifact set
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=13
+          actual=$(find screenshots -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')
+          [[ "$actual" == "$expected" ]] || {
+            echo "Expected $expected screenshots, found $actual"
+            exit 1
+          }
+
+          for file in screenshots/*.png; do
+            bytes=$(stat -f%z "$file")
+            [[ "$bytes" -gt 50000 ]] || {
+              echo "$file is unexpectedly small: $bytes bytes"
+              exit 1
+            }
+            width=$(sips -g pixelWidth "$file" | awk '/pixelWidth/ {print $2}')
+            height=$(sips -g pixelHeight "$file" | awk '/pixelHeight/ {print $2}')
+            [[ "$width" -ge 1000 && "$height" -ge 2000 ]] || {
+              echo "$file has unexpected dimensions: ${width}x${height}"
+              exit 1
+            }
+          done
+
       - name: Upload screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: mapribbon-ios-screens-${{ github.sha }}
           path: screenshots
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
-      - name: Upload build log on failure
-        if: failure()
+      - name: Upload test results and logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mapribbon-xcodebuild-log-${{ github.sha }}
-          path: ${{ runner.temp }}/xcodebuild.log
-          if-no-files-found: ignore
+          name: mapribbon-ios-validation-${{ github.sha }}
+          path: ${{ runner.temp }}/test-results
+          if-no-files-found: warn
           retention-days: 14
