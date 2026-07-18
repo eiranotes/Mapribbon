@@ -44,6 +44,50 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertEqual(PhotoClusterer.cluster(assets).count, 1)
     }
 
+    func testMultiplePhotosAtEachStopRemainGroupedAndPreserved() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let stops: [(Double, Double, TimeInterval)] = [
+            (37.5663, 126.9779, 0),
+            (37.5796, 126.9770, 2 * 3_600),
+            (37.5702, 126.9997, 5 * 3_600),
+            (37.5663, 126.9780, 10 * 3_600)
+        ]
+
+        var assets: [PhotoAssetSnapshot] = []
+        for (stopIndex, stop) in stops.enumerated() {
+            for photoIndex in 0..<3 {
+                assets.append(make(
+                    id: "stop-\(stopIndex)-photo-\(photoIndex)",
+                    date: start.addingTimeInterval(stop.2 + Double(photoIndex) * 12 * 60),
+                    latitude: stop.0 + Double(photoIndex) * 0.00005,
+                    longitude: stop.1 + Double(photoIndex) * 0.00005
+                ))
+            }
+        }
+
+        let clusters = PhotoClusterer.cluster(assets)
+
+        XCTAssertEqual(clusters.count, 4)
+        XCTAssertEqual(clusters.map { $0.assets.count }, [3, 3, 3, 3])
+        XCTAssertEqual(clusters.flatMap(\.assets).count, 12)
+        XCTAssertEqual(Set(clusters.flatMap(\.assets).map(\.id)), Set(assets.map(\.id)))
+    }
+
+    func testRepresentativePrefersFavoriteWithinPhotoStack() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let normal = make(id: "normal", date: start, latitude: 37.56, longitude: 126.97)
+        let favorite = make(
+            id: "favorite",
+            date: start.addingTimeInterval(15 * 60),
+            latitude: 37.5601,
+            longitude: 126.9701,
+            isFavorite: true
+        )
+        let later = make(id: "later", date: start.addingTimeInterval(30 * 60), latitude: 37.5602, longitude: 126.9702)
+
+        XCTAssertEqual(PhotoClusterer.representative(in: [normal, favorite, later])?.id, "favorite")
+    }
+
     @MainActor
     func testMovingPhotoBetweenPlacesKeepsSingleOwner() {
         let start = Date(timeIntervalSince1970: 1_700_000_000)
@@ -106,7 +150,13 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertEqual(Set(draft.places[0].assetIdentifiers), Set(["a", "b"]))
     }
 
-    private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {
+    private func make(
+        id: String,
+        date: Date,
+        latitude: Double,
+        longitude: Double,
+        isFavorite: Bool = false
+    ) -> PhotoAssetSnapshot {
         PhotoAssetSnapshot(
             id: id,
             creationDate: date,
@@ -114,7 +164,7 @@ final class PhotoClustererTests: XCTestCase {
             longitude: longitude,
             pixelWidth: 4_032,
             pixelHeight: 3_024,
-            isFavorite: false,
+            isFavorite: isFavorite,
             isScreenshot: false
         )
     }

@@ -96,8 +96,21 @@ final class PhotoLibraryService {
 final class PhotoImageService {
     static let shared = PhotoImageService()
     private let manager = PHCachingImageManager()
+    private let cache = NSCache<NSString, UIImage>()
 
-    private init() {}
+    private init() {
+        cache.countLimit = 120
+    }
+
+    func register(_ images: [String: UIImage]) {
+        for (identifier, image) in images {
+            cache.setObject(image, forKey: identifier as NSString)
+        }
+    }
+
+    func cachedImage(for identifier: String) -> UIImage? {
+        cache.object(forKey: identifier as NSString)
+    }
 
     func image(
         for identifier: String,
@@ -105,6 +118,10 @@ final class PhotoImageService {
         contentMode: PHImageContentMode = .aspectFill,
         highQuality: Bool = false
     ) async -> UIImage? {
+        if let cached = cache.object(forKey: identifier as NSString) {
+            return cached
+        }
+
         let fetch = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
         guard let asset = fetch.firstObject else { return nil }
 
@@ -134,6 +151,7 @@ final class PhotoImageService {
                 }
 
                 if let image, !highQuality || !degraded {
+                    self.cache.setObject(image, forKey: identifier as NSString)
                     resumed = true
                     continuation.resume(returning: image)
                 }

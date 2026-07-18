@@ -270,7 +270,7 @@ struct BoardEditorView: View {
 
                         HStack(spacing: 10) {
                             Button { showingPlaces = true } label: {
-                                Label("사진·경로", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                                Label("사진·순서", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                             }
                             .buttonStyle(MRSecondaryButtonStyle())
 
@@ -452,16 +452,29 @@ struct ExportSheet: View {
                         .shadow(color: .black.opacity(0.08), radius: 12, y: 6)
                         .frame(maxHeight: 500)
 
-                    HStack(spacing: 10) {
-                        ExportActionButton(title: "저장", symbol: "square.and.arrow.down") {
-                            Task { if let image = await render() { onExport(image, .save) } }
-                        }
-                        ExportActionButton(title: "Instagram", symbol: "camera") {
+                    VStack(spacing: 10) {
+                        Button {
                             Task { if let image = await render() { onExport(image, .instagram) } }
+                        } label: {
+                            Label("Instagram 스토리로 공유", systemImage: "camera")
                         }
-                        ExportActionButton(title: "더 보기", symbol: "square.and.arrow.up") {
-                            Task { if let image = await render() { onExport(image, .share) } }
+                        .buttonStyle(MRPrimaryButtonStyle())
+                        .disabled(isRendering)
+
+                        HStack(spacing: 10) {
+                            ExportActionButton(title: "사진에 저장", symbol: "square.and.arrow.down") {
+                                Task { if let image = await render() { onExport(image, .save) } }
+                            }
+                            ExportActionButton(title: "다른 앱", symbol: "square.and.arrow.up") {
+                                Task { if let image = await render() { onExport(image, .share) } }
+                            }
                         }
+                        .disabled(isRendering)
+
+                        Text("공유되는 것은 완성된 보드 이미지뿐이며 원본 사진은 전송되지 않습니다.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(MRColor.secondaryText)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .padding(20)
@@ -513,6 +526,24 @@ private struct ExportActionButton: View {
     }
 }
 
+private struct DraftPhotoView: View {
+    let identifier: String
+    let images: [String: UIImage]
+    let size: CGSize
+
+    var body: some View {
+        Group {
+            if let image = images[identifier] {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                AssetThumbnailView(identifier: identifier, size: size)
+            }
+        }
+    }
+}
+
 struct PlaceManagerView: View {
     @Bindable var draft: BoardDraft
     @Environment(\.dismiss) private var dismiss
@@ -527,7 +558,7 @@ struct PlaceManagerView: View {
                             PlaceEditorView(placeID: place.id, draft: draft)
                         } label: {
                             HStack(spacing: 12) {
-                                AssetThumbnailView(identifier: place.representativeAssetIdentifier, size: CGSize(width: 58, height: 58))
+                                DraftPhotoView(identifier: place.representativeAssetIdentifier, images: draft.photoImages, size: CGSize(width: 58, height: 58))
                                     .frame(width: 58, height: 58)
                                     .clipShape(RoundedRectangle(cornerRadius: 8))
                                     .opacity(place.isHidden ? 0.35 : 1)
@@ -568,7 +599,7 @@ struct PlaceManagerView: View {
                     Text("같은 위치를 나중에 다시 방문한 경우 별도 정류장으로 유지합니다. 드래그해 연결 순서를 바꾸거나, 스와이프해 분리·합치기 할 수 있습니다.")
                 }
             }
-            .navigationTitle("사진과 경로")
+            .navigationTitle("사진과 순서")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { EditButton() }
@@ -612,7 +643,7 @@ struct PlaceEditorView: View {
                                     }
                                 }
                             } label: {
-                                AssetThumbnailView(identifier: identifier, size: CGSize(width: 200, height: 200))
+                                DraftPhotoView(identifier: identifier, images: draft.photoImages, size: CGSize(width: 200, height: 200))
                                     .aspectRatio(1, contentMode: .fill)
                                     .clipped()
                                     .overlay {
@@ -640,7 +671,7 @@ struct PlaceEditorView: View {
                                 Button {
                                     draft.places[index].representativeAssetIdentifier = identifier
                                 } label: {
-                                    AssetThumbnailView(identifier: identifier, size: CGSize(width: 180, height: 180))
+                                    DraftPhotoView(identifier: identifier, images: draft.photoImages, size: CGSize(width: 180, height: 180))
                                         .frame(width: 92, height: 92)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                         .overlay {
@@ -674,69 +705,108 @@ private struct InteractiveBoardPreview: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var expandedPlaceID: UUID?
     @State private var page = 0
-    @Namespace private var namespace
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
                 BoardCanvasView(model: draft.renderModel, watermark: false)
 
-                ForEach(draft.renderModel.visiblePlaces) { place in
-                    if let point = draft.normalizedPoints[place.id] {
-                        Button {
-                            page = 0
-                            withAnimation(reduceMotion ? .easeOut(duration: 0.16) : MRMotion.spatial) {
-                                expandedPlaceID = place.id
-                            }
-                        } label: {
-                            Color.clear
-                                .frame(width: max(48, proxy.size.width * 0.14), height: max(48, proxy.size.width * 0.14))
-                                .contentShape(Circle())
+                ForEach(tappablePlacements(in: proxy.size)) { placement in
+                    Button {
+                        page = 0
+                        withAnimation(reduceMotion ? .easeOut(duration: 0.16) : MRMotion.spatial) {
+                            expandedPlaceID = placement.place.id
                         }
-                        .buttonStyle(.plain)
-                        .position(x: point.x * proxy.size.width, y: point.y * proxy.size.height)
-                        .accessibilityLabel("\(place.title), 사진 \(place.photoCount)장 펼치기")
+                    } label: {
+                        Color.clear
+                            .frame(width: placement.hitSize.width, height: placement.hitSize.height)
+                            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     }
+                    .buttonStyle(.plain)
+                    .position(placement.center)
+                    .accessibilityLabel("\(placement.place.title), 사진 \(placement.place.photoCount)장 펼치기")
                 }
 
                 if let place = draft.renderModel.visiblePlaces.first(where: { $0.id == expandedPlaceID }) {
                     expandedGallery(place, in: proxy.size)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                        .transition(.opacity.combined(with: .scale(scale: 0.965)))
+                        .zIndex(10)
                 }
             }
+        }
+        .onAppear {
+            guard ProcessInfo.processInfo.arguments.contains("--ci-demo-gallery"),
+                  expandedPlaceID == nil else { return }
+            expandedPlaceID = draft.renderModel.visiblePlaces.first?.id
+        }
+    }
+
+    private func tappablePlacements(in size: CGSize) -> [BoardTapPlacement] {
+        if draft.template == .pinboard {
+            return PinboardLayout.placements(model: draft.renderModel).map { placement in
+                BoardTapPlacement(
+                    place: placement.place,
+                    center: CGPoint(x: placement.center.x * size.width, y: placement.center.y * size.height),
+                    hitSize: CGSize(width: size.width * 0.29, height: size.height * 0.19)
+                )
+            }
+        }
+
+        return draft.renderModel.visiblePlaces.compactMap { place in
+            guard let point = draft.normalizedPoints[place.id] else { return nil }
+            return BoardTapPlacement(
+                place: place,
+                center: CGPoint(x: point.x * size.width, y: point.y * size.height),
+                hitSize: CGSize(width: max(48, size.width * 0.15), height: max(48, size.width * 0.15))
+            )
         }
     }
 
     private func expandedGallery(_ place: BoardPlace, in size: CGSize) -> some View {
         ZStack {
             MRColor.scrim
+                .ignoresSafeArea()
                 .onTapGesture {
-                    withAnimation(reduceMotion ? .easeOut(duration: 0.14) : MRMotion.spatial) { expandedPlaceID = nil }
+                    withAnimation(reduceMotion ? .easeOut(duration: 0.14) : MRMotion.spatial) {
+                        expandedPlaceID = nil
+                    }
                 }
 
             VStack(spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(place.title).font(.system(size: 17, weight: .bold)).foregroundStyle(.white)
-                        Text("\(place.timeRangeText) · \(place.photoCount)장")
-                            .font(.system(size: 12)).foregroundStyle(.white.opacity(0.75))
+                        Text(place.title)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.white)
+                        Text("\(place.timeRangeText) · 사진 \(place.photoCount)장")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.72))
                     }
                     Spacer()
                     Button {
-                        withAnimation(reduceMotion ? .easeOut(duration: 0.14) : MRMotion.spatial) { expandedPlaceID = nil }
+                        withAnimation(reduceMotion ? .easeOut(duration: 0.14) : MRMotion.spatial) {
+                            expandedPlaceID = nil
+                        }
                     } label: {
-                        Image(systemName: "xmark").foregroundStyle(.white)
-                            .frame(width: 36, height: 36).background(.black.opacity(0.25)).clipShape(Circle())
+                        Image(systemName: "xmark")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 40, height: 40)
+                            .background(.black.opacity(0.28))
+                            .clipShape(Circle())
                     }
+                    .buttonStyle(.plain)
                 }
 
                 TabView(selection: $page) {
                     ForEach(Array(place.assetIdentifiers.enumerated()), id: \.element) { index, identifier in
                         Group {
                             if let image = draft.photoImages[identifier] {
-                                Image(uiImage: image).resizable().scaledToFit()
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
                             } else {
-                                AssetThumbnailView(identifier: identifier, size: CGSize(width: 800, height: 800))
+                                AssetThumbnailView(identifier: identifier, size: CGSize(width: 900, height: 900))
                                     .scaledToFit()
                             }
                         }
@@ -745,14 +815,85 @@ private struct InteractiveBoardPreview: View {
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
-                .frame(height: size.height * 0.48)
+                .frame(height: size.height * 0.50)
             }
             .padding(18)
-            .frame(width: size.width * 0.90)
+            .frame(width: size.width * 0.91)
             .background(Color(hex: 0x22231F))
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: .black.opacity(0.28), radius: 24, y: 12)
+            .shadow(color: .black.opacity(0.30), radius: 26, y: 14)
         }
+    }
+}
+
+private struct BoardTapPlacement: Identifiable {
+    let place: BoardPlace
+    let center: CGPoint
+    let hitSize: CGSize
+    var id: UUID { place.id }
+}
+
+private struct PinboardPlacement: Identifiable {
+    let place: BoardPlace
+    let center: CGPoint
+    let rotation: Double
+    var id: UUID { place.id }
+}
+
+private enum PinboardLayout {
+    static func placements(model: BoardRenderModel) -> [PinboardPlacement] {
+        let places = Array(model.visiblePlaces.prefix(6))
+        let fallback = [
+            CGPoint(x: 0.20, y: 0.28), CGPoint(x: 0.76, y: 0.27),
+            CGPoint(x: 0.76, y: 0.60), CGPoint(x: 0.24, y: 0.67),
+            CGPoint(x: 0.67, y: 0.80), CGPoint(x: 0.34, y: 0.82)
+        ]
+        let nudges = [
+            CGPoint(x: -0.045, y: -0.025), CGPoint(x: 0.050, y: -0.018),
+            CGPoint(x: 0.042, y: 0.035), CGPoint(x: -0.045, y: 0.040),
+            CGPoint(x: 0.030, y: 0.025), CGPoint(x: -0.025, y: 0.020)
+        ]
+        let rotations: [Double] = [-3.0, 2.2, -1.6, 2.7, -2.2, 1.6]
+        var occupied: [CGPoint] = []
+        var output: [PinboardPlacement] = []
+
+        for (index, place) in places.enumerated() {
+            let source = model.normalizedPoints[place.id] ?? fallback[index % fallback.count]
+            var candidate = CGPoint(
+                x: clamp(source.x + nudges[index % nudges.count].x, lower: 0.16, upper: 0.84),
+                y: clamp(source.y + nudges[index % nudges.count].y, lower: 0.24, upper: 0.79)
+            )
+
+            var attempt = 0
+            while occupied.contains(where: { distance($0, candidate) < 0.215 }) && attempt < fallback.count {
+                let alternate = fallback[(index + attempt) % fallback.count]
+                candidate = CGPoint(
+                    x: clamp(alternate.x + nudges[index % nudges.count].x * 0.35, lower: 0.16, upper: 0.84),
+                    y: clamp(alternate.y + nudges[index % nudges.count].y * 0.35, lower: 0.24, upper: 0.79)
+                )
+                attempt += 1
+            }
+
+            occupied.append(candidate)
+            output.append(PinboardPlacement(place: place, center: candidate, rotation: rotations[index % rotations.count]))
+        }
+        return output
+    }
+
+    static func anchor(for placement: PinboardPlacement, in size: CGSize) -> CGPoint {
+        let cardHeight = size.height * 0.165
+        return CGPoint(
+            x: placement.center.x * size.width,
+            y: placement.center.y * size.height - cardHeight * 0.47
+        )
+    }
+
+    private static func clamp(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
+        min(upper, max(lower, value))
+    }
+
+    private static func distance(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
+        hypot(lhs.x - rhs.x, lhs.y - rhs.y)
     }
 }
 
@@ -763,10 +904,14 @@ struct BoardCanvasView: View {
     var body: some View {
         GeometryReader { proxy in
             switch model.template {
-            case .pinboard: pinboard(in: proxy.size)
-            case .ribbon: ribbon(in: proxy.size)
-            case .editorial: editorial(in: proxy.size)
-            case .postcard: postcard(in: proxy.size)
+            case .pinboard:
+                pinboard(in: proxy.size)
+            case .ribbon:
+                ribbon(in: proxy.size)
+            case .editorial:
+                editorial(in: proxy.size)
+            case .postcard:
+                postcard(in: proxy.size)
             }
         }
         .background(MRColor.paper)
@@ -774,49 +919,73 @@ struct BoardCanvasView: View {
     }
 
     private func pinboard(in size: CGSize) -> some View {
-        ZStack {
-            Image(uiImage: model.mapImage).resizable().scaledToFill().saturation(0.70).contrast(0.92)
-            Color(hex: 0xF4EFE5).opacity(0.18)
-            threadLayer(size)
-            mapPhotoPins(size)
-            pinboardCards(size)
-            header(size, dark: true)
+        let placements = PinboardLayout.placements(model: model)
+        let anchors = placements.map { PinboardLayout.anchor(for: $0, in: size) }
+
+        return ZStack {
+            Image(uiImage: model.mapImage)
+                .resizable()
+                .scaledToFill()
+                .saturation(0.56)
+                .contrast(0.90)
+                .brightness(0.035)
+
+            Color(hex: 0xF3EBDD).opacity(0.19)
+
+            RadialGradient(
+                colors: [.clear, Color.black.opacity(0.075)],
+                center: .center,
+                startRadius: size.width * 0.18,
+                endRadius: size.width * 0.72
+            )
+
+            CottonThreadLayer(points: anchors, width: size.width)
+            pinboardStacks(placements, size: size)
+            header(size, usesPaperLabel: true)
             footer(size, dark: true)
         }
     }
 
     private func ribbon(in size: CGSize) -> some View {
-        ZStack {
-            Image(uiImage: model.mapImage).resizable().scaledToFill()
-            Color.white.opacity(0.10)
-            threadLayer(size)
+        let anchors = mapAnchors(in: size)
+        return ZStack {
+            Image(uiImage: model.mapImage).resizable().scaledToFill().saturation(0.82)
+            Color.white.opacity(0.08)
+            CottonThreadLayer(points: anchors, width: size.width)
             mapPhotoPins(size)
-            header(size, dark: true)
+            header(size, usesPaperLabel: true)
             footer(size, dark: true)
         }
     }
 
     private func editorial(in size: CGSize) -> some View {
-        ZStack(alignment: .top) {
+        let mapHeight = size.height * 0.68
+        let mapSize = CGSize(width: size.width, height: mapHeight)
+        return ZStack(alignment: .top) {
             MRColor.paper
             VStack(spacing: 0) {
                 ZStack {
-                    Image(uiImage: model.mapImage).resizable().scaledToFill()
-                    threadLayer(CGSize(width: size.width, height: size.height * 0.68))
-                    mapPhotoPins(CGSize(width: size.width, height: size.height * 0.68))
+                    Image(uiImage: model.mapImage).resizable().scaledToFill().saturation(0.78)
+                    CottonThreadLayer(points: mapAnchors(in: mapSize), width: size.width)
+                    mapPhotoPins(mapSize)
                 }
-                .frame(height: size.height * 0.68)
+                .frame(height: mapHeight)
+
                 HStack(spacing: size.width * 0.018) {
                     ForEach(Array(model.visiblePlaces.prefix(4))) { place in
                         if let image = model.photoImages[place.representativeAssetIdentifier] {
-                            Image(uiImage: image).resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(maxWidth: .infinity)
+                                .clipped()
                         }
                     }
                 }
                 .frame(height: size.height * 0.22)
                 .padding(size.width * 0.04)
             }
-            header(size, dark: false)
+            header(size, usesPaperLabel: false)
             footer(size, dark: false)
         }
     }
@@ -824,45 +993,44 @@ struct BoardCanvasView: View {
     private func postcard(in size: CGSize) -> some View {
         ZStack {
             MRColor.paper
-            Image(uiImage: model.mapImage).resizable().scaledToFill()
+            Image(uiImage: model.mapImage)
+                .resizable()
+                .scaledToFill()
                 .padding(size.width * 0.07)
-                .overlay { RoundedRectangle(cornerRadius: size.width * 0.01).stroke(Color.black.opacity(0.10), lineWidth: 1).padding(size.width * 0.07) }
-            threadLayer(size).padding(size.width * 0.07)
+                .overlay {
+                    RoundedRectangle(cornerRadius: size.width * 0.012)
+                        .stroke(Color.black.opacity(0.10), lineWidth: 1)
+                        .padding(size.width * 0.07)
+                }
+            CottonThreadLayer(points: mapAnchors(in: size), width: size.width)
+                .padding(size.width * 0.07)
             mapPhotoPins(size)
-            header(size, dark: false)
+            header(size, usesPaperLabel: false)
             footer(size, dark: false)
         }
     }
 
-    @ViewBuilder private func threadLayer(_ size: CGSize) -> some View {
-        Canvas { context, canvas in
-            let places = model.visiblePlaces
-            guard let first = places.first, let firstPoint = model.normalizedPoints[first.id] else { return }
-            var path = Path()
-            path.move(to: CGPoint(x: firstPoint.x * canvas.width, y: firstPoint.y * canvas.height))
-            for place in places.dropFirst() {
-                guard let point = model.normalizedPoints[place.id] else { continue }
-                let destination = CGPoint(x: point.x * canvas.width, y: point.y * canvas.height)
-                path.addLine(to: destination)
-            }
-            context.stroke(
-                path,
-                with: .color(MRColor.thread),
-                style: StrokeStyle(lineWidth: max(2.5, canvas.width * 0.007), lineCap: .round, lineJoin: .round)
-            )
+    private func mapAnchors(in size: CGSize) -> [CGPoint] {
+        model.visiblePlaces.compactMap { place in
+            guard let point = model.normalizedPoints[place.id] else { return nil }
+            return CGPoint(x: point.x * size.width, y: point.y * size.height)
         }
     }
 
-    @ViewBuilder private func mapPhotoPins(_ size: CGSize) -> some View {
+    @ViewBuilder
+    private func mapPhotoPins(_ size: CGSize) -> some View {
         ForEach(Array(model.visiblePlaces.enumerated()), id: \.element.id) { index, place in
             if let point = model.normalizedPoints[place.id],
                let image = model.photoImages[place.representativeAssetIdentifier] {
                 ZStack(alignment: .bottomTrailing) {
-                    Image(uiImage: image).resizable().scaledToFill()
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
                         .frame(width: size.width * 0.105, height: size.width * 0.105)
                         .clipShape(Circle())
                         .overlay { Circle().stroke(.white, lineWidth: size.width * 0.010) }
                         .shadow(color: .black.opacity(0.22), radius: size.width * 0.014, y: size.width * 0.008)
+
                     Text("\(index + 1)")
                         .font(.system(size: max(8, size.width * 0.024), weight: .bold))
                         .foregroundStyle(.white)
@@ -870,15 +1038,16 @@ struct BoardCanvasView: View {
                         .background(MRColor.accent)
                         .clipShape(Circle())
                         .overlay { Circle().stroke(.white, lineWidth: 1.5) }
+
                     if place.photoCount > 1 {
-                        Text("+\(place.photoCount - 1)")
+                        Text("\(place.photoCount)장")
                             .font(.system(size: max(7, size.width * 0.019), weight: .bold))
                             .foregroundStyle(MRColor.ink)
                             .padding(.horizontal, size.width * 0.014)
                             .frame(height: size.width * 0.040)
                             .background(.white)
                             .clipShape(Capsule())
-                            .offset(x: size.width * 0.014, y: -size.width * 0.070)
+                            .offset(x: size.width * 0.018, y: -size.width * 0.070)
                     }
                 }
                 .position(x: point.x * size.width, y: point.y * size.height)
@@ -886,72 +1055,253 @@ struct BoardCanvasView: View {
         }
     }
 
-    @ViewBuilder private func pinboardCards(_ size: CGSize) -> some View {
-        let positions = cardPositions(count: min(5, model.visiblePlaces.count))
-        ForEach(Array(model.visiblePlaces.prefix(5).enumerated()), id: \.element.id) { index, place in
-            if index < positions.count, let image = model.photoImages[place.representativeAssetIdentifier] {
-                VStack(alignment: .leading, spacing: size.height * 0.006) {
-                    Image(uiImage: image).resizable().scaledToFill().clipped()
-                    HStack {
-                        Text(place.title).lineLimit(1)
-                        Spacer()
-                        Text(place.startDate.formatted(date: .omitted, time: .shortened))
-                    }
-                    .font(.system(size: size.width * 0.021, weight: .semibold))
-                    .foregroundStyle(MRColor.ink.opacity(0.78))
-                }
-                .padding(size.width * 0.012)
-                .background(.white)
-                .frame(width: size.width * 0.21, height: size.height * 0.16)
-                .shadow(color: .black.opacity(0.16), radius: size.width * 0.014, y: size.width * 0.009)
-                .rotationEffect(.degrees([-4, 3, -2, 4, -3][index]))
-                .position(x: positions[index].x * size.width, y: positions[index].y * size.height)
-            }
+    @ViewBuilder
+    private func pinboardStacks(_ placements: [PinboardPlacement], size: CGSize) -> some View {
+        ForEach(Array(placements.enumerated()), id: \.element.id) { index, placement in
+            PinboardPhotoStack(
+                place: placement.place,
+                images: model.photoImages,
+                cardWidth: size.width * 0.255,
+                cardHeight: size.height * 0.165,
+                rotation: placement.rotation,
+                index: index
+            )
+            .position(x: placement.center.x * size.width, y: placement.center.y * size.height)
         }
     }
 
-    private func header(_ size: CGSize, dark: Bool) -> some View {
-        VStack(alignment: .leading, spacing: size.height * 0.004) {
-            Text(model.date.mrBoardDate.uppercased())
-                .font(.system(size: size.width * 0.030, weight: .semibold))
+    private func header(_ size: CGSize, usesPaperLabel: Bool) -> some View {
+        let content = VStack(alignment: .leading, spacing: size.height * 0.004) {
+            Text(model.date.mrBoardDate)
+                .font(.system(size: size.width * 0.026, weight: .semibold))
+                .foregroundStyle(MRColor.ink.opacity(0.62))
             Text(model.title)
-                .font(.system(size: size.width * 0.068, weight: .bold, design: model.template == .postcard ? .serif : .default))
+                .font(.system(size: size.width * 0.057, weight: .bold, design: model.template == .postcard ? .serif : .default))
                 .lineLimit(2)
+                .minimumScaleFactor(0.82)
+                .foregroundStyle(MRColor.ink)
             if !model.caption.isEmpty {
                 Text(model.caption)
-                    .font(.system(size: size.width * 0.030, weight: .medium))
+                    .font(.system(size: size.width * 0.027, weight: .medium))
                     .lineLimit(2)
-                    .opacity(0.72)
+                    .foregroundStyle(MRColor.ink.opacity(0.64))
             }
         }
-        .foregroundStyle(dark ? Color.black.opacity(0.82) : MRColor.ink)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, size.width * 0.065)
-        .padding(.top, size.height * 0.045)
+        .padding(usesPaperLabel ? size.width * 0.028 : 0)
+        .frame(maxWidth: size.width * 0.62, alignment: .leading)
+        .background {
+            if usesPaperLabel {
+                RoundedRectangle(cornerRadius: size.width * 0.014, style: .continuous)
+                    .fill(Color(hex: 0xFFFDF8).opacity(0.92))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: size.width * 0.014, style: .continuous)
+                            .stroke(Color.black.opacity(0.07), lineWidth: 1)
+                    }
+                    .shadow(color: .black.opacity(0.10), radius: size.width * 0.016, y: size.width * 0.010)
+            }
+        }
+
+        return content
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
+            .padding(.leading, size.width * 0.055)
+            .padding(.top, size.height * 0.035)
     }
 
     private func footer(_ size: CGSize, dark: Bool) -> some View {
-        VStack {
+        HStack {
+            Text("사진 \(model.photoCount)장 · 장소 \(model.visiblePlaces.count)곳")
             Spacer()
-            HStack {
-                Text("사진 \(model.photoCount)장 · 장소 \(model.visiblePlaces.count)곳")
-                Spacer()
-                if watermark { Text("Made with MapRibbon") }
-            }
-            .font(.system(size: size.width * 0.028, weight: .semibold))
-            .foregroundStyle(dark ? Color.black.opacity(0.58) : MRColor.ink.opacity(0.64))
-            .padding(.horizontal, size.width * 0.065)
-            .padding(.bottom, size.height * 0.030)
+            if watermark { Text("Made with MapRibbon") }
         }
+        .font(.system(size: size.width * 0.026, weight: .semibold))
+        .foregroundStyle(dark ? Color.black.opacity(0.58) : MRColor.ink.opacity(0.64))
+        .padding(.horizontal, size.width * 0.055)
+        .padding(.bottom, size.height * 0.026)
+        .frame(width: size.width, height: size.height, alignment: .bottom)
+    }
+}
+
+private struct CottonThreadLayer: View {
+    let points: [CGPoint]
+    let width: CGFloat
+
+    var body: some View {
+        Canvas { context, _ in
+            guard points.count > 1 else { return }
+
+            for index in 0..<(points.count - 1) {
+                let path = threadPath(from: points[index], to: points[index + 1], index: index)
+                let baseWidth = max(3.2, width * 0.0082)
+
+                context.drawLayer { layer in
+                    layer.addFilter(.shadow(color: .black.opacity(0.24), radius: width * 0.008, x: 0, y: width * 0.006))
+                    layer.stroke(
+                        path,
+                        with: .color(Color(hex: 0x7F302C).opacity(0.76)),
+                        style: StrokeStyle(lineWidth: baseWidth + width * 0.004, lineCap: .round, lineJoin: .round)
+                    )
+                }
+
+                context.stroke(
+                    path,
+                    with: .color(Color(hex: 0xA83F36)),
+                    style: StrokeStyle(lineWidth: baseWidth, lineCap: .round, lineJoin: .round)
+                )
+                context.stroke(
+                    path,
+                    with: .color(Color(hex: 0xD85A4C)),
+                    style: StrokeStyle(lineWidth: baseWidth * 0.68, lineCap: .round, lineJoin: .round)
+                )
+                context.stroke(
+                    path,
+                    with: .color(Color.white.opacity(0.24)),
+                    style: StrokeStyle(lineWidth: max(0.8, baseWidth * 0.17), lineCap: .round, lineJoin: .round)
+                )
+            }
+
+            for point in points {
+                let radius = width * 0.012
+                var loop = Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2))
+                context.stroke(
+                    loop,
+                    with: .color(Color(hex: 0xA83F36)),
+                    style: StrokeStyle(lineWidth: max(2, width * 0.006), lineCap: .round)
+                )
+            }
+        }
+        .allowsHitTesting(false)
     }
 
-    private func cardPositions(count: Int) -> [CGPoint] {
-        let all = [
-            CGPoint(x: 0.20, y: 0.25), CGPoint(x: 0.78, y: 0.24),
-            CGPoint(x: 0.76, y: 0.61), CGPoint(x: 0.22, y: 0.67),
-            CGPoint(x: 0.66, y: 0.82)
-        ]
-        return Array(all.prefix(max(0, min(count, all.count))))
+    private func threadPath(from start: CGPoint, to end: CGPoint, index: Int) -> Path {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = max(1, hypot(dx, dy))
+        let normal = CGPoint(x: -dy / length, y: dx / length)
+        let direction: CGFloat = index.isMultiple(of: 2) ? 1 : -1
+        let sag = min(width * 0.082, max(width * 0.025, length * 0.105)) * direction
+
+        var path = Path()
+        path.move(to: start)
+        path.addCurve(
+            to: end,
+            control1: CGPoint(x: start.x + dx * 0.34 + normal.x * sag, y: start.y + dy * 0.34 + normal.y * sag),
+            control2: CGPoint(x: start.x + dx * 0.70 + normal.x * sag * 0.72, y: start.y + dy * 0.70 + normal.y * sag * 0.72)
+        )
+        return path
+    }
+}
+
+private struct PinboardPhotoStack: View {
+    let place: BoardPlace
+    let images: [String: UIImage]
+    let cardWidth: CGFloat
+    let cardHeight: CGFloat
+    let rotation: Double
+    let index: Int
+
+    private var orderedIdentifiers: [String] {
+        let available = place.assetIdentifiers.filter { images[$0] != nil }
+        guard !available.isEmpty else { return [] }
+        let representative = place.representativeAssetIdentifier
+        let supporting = available.filter { $0 != representative }.prefix(2)
+        return Array(supporting) + (images[representative] == nil ? [] : [representative])
+    }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            ForEach(Array(orderedIdentifiers.enumerated()), id: \.element) { itemIndex, identifier in
+                let isFront = itemIndex == orderedIdentifiers.count - 1
+                if let image = images[identifier] {
+                    polaroid(image: image, isFront: isFront)
+                        .rotationEffect(.degrees(cardRotation(itemIndex: itemIndex, isFront: isFront)))
+                        .offset(cardOffset(itemIndex: itemIndex, isFront: isFront))
+                }
+            }
+
+            PushpinView(size: cardWidth * 0.085, tint: pinColor)
+                .offset(y: -cardHeight * 0.045)
+        }
+        .frame(width: cardWidth * 1.18, height: cardHeight * 1.13)
+    }
+
+    private func polaroid(image: UIImage, isFront: Bool) -> some View {
+        VStack(alignment: .leading, spacing: cardHeight * 0.028) {
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: cardWidth * 0.91, height: isFront ? cardHeight * 0.67 : cardHeight * 0.73)
+                .clipped()
+
+            if isFront {
+                HStack(alignment: .firstTextBaseline, spacing: cardWidth * 0.03) {
+                    VStack(alignment: .leading, spacing: cardHeight * 0.008) {
+                        Text(place.title)
+                            .lineLimit(1)
+                            .font(.system(size: cardWidth * 0.070, weight: .bold))
+                        Text(place.timeRangeText)
+                            .font(.system(size: cardWidth * 0.052, weight: .medium))
+                            .foregroundStyle(MRColor.ink.opacity(0.58))
+                    }
+                    Spacer(minLength: 0)
+                    if place.photoCount > 1 {
+                        Text("\(place.photoCount)장")
+                            .font(.system(size: cardWidth * 0.050, weight: .bold))
+                            .foregroundStyle(MRColor.accent)
+                            .padding(.horizontal, cardWidth * 0.035)
+                            .padding(.vertical, cardHeight * 0.012)
+                            .background(MRColor.accentSoft)
+                            .clipShape(Capsule())
+                    }
+                }
+                .foregroundStyle(MRColor.ink.opacity(0.84))
+            }
+        }
+        .padding(cardWidth * 0.045)
+        .frame(width: cardWidth, height: cardHeight, alignment: .top)
+        .background(Color(hex: 0xFFFDF8))
+        .overlay {
+            Rectangle().stroke(Color.black.opacity(0.075), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(isFront ? 0.18 : 0.12), radius: cardWidth * 0.045, y: cardWidth * 0.028)
+    }
+
+    private func cardRotation(itemIndex: Int, isFront: Bool) -> Double {
+        if isFront { return rotation }
+        return itemIndex.isMultiple(of: 2) ? rotation - 6.5 : rotation + 6.0
+    }
+
+    private func cardOffset(itemIndex: Int, isFront: Bool) -> CGSize {
+        if isFront { return .zero }
+        return itemIndex.isMultiple(of: 2)
+            ? CGSize(width: -cardWidth * 0.070, height: cardHeight * 0.020)
+            : CGSize(width: cardWidth * 0.070, height: cardHeight * 0.028)
+    }
+
+    private var pinColor: Color {
+        let colors: [Color] = [Color(hex: 0xB74B3E), Color(hex: 0x365F72), Color(hex: 0xB27835), Color(hex: 0x5A6E48)]
+        return colors[index % colors.count]
+    }
+}
+
+private struct PushpinView: View {
+    let size: CGFloat
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(Color.black.opacity(0.16))
+                .frame(width: size * 1.12, height: size * 1.12)
+                .offset(y: size * 0.16)
+            Circle()
+                .fill(tint)
+                .frame(width: size, height: size)
+            Circle()
+                .fill(Color.white.opacity(0.46))
+                .frame(width: size * 0.28, height: size * 0.28)
+                .offset(x: -size * 0.19, y: -size * 0.20)
+        }
+        .shadow(color: .black.opacity(0.22), radius: size * 0.18, y: size * 0.12)
     }
 }
 
