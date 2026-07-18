@@ -102,6 +102,7 @@ jobs:
         run: |
           set -euxo pipefail
           UDID="${{ steps.simulator.outputs.udid }}"
+          LOCALE_ARGS=(--args -AppleLanguages '(ko)' -AppleLocale ko_KR)
           mkdir -p Screenshots
 
           xcrun simctl boot "$UDID" 2>/dev/null || true
@@ -110,30 +111,32 @@ jobs:
 
           test -d "$APP_PATH"
           xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl privacy "$UDID" grant photos "$APP_BUNDLE_ID" || true
+          xcrun simctl privacy "$UDID" grant photos-add "$APP_BUNDLE_ID" || true
 
           xcrun simctl spawn "$UDID" defaults delete "$APP_BUNDLE_ID" hasCompletedOnboarding 2>/dev/null || true
-          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID"
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" "${LOCALE_ARGS[@]}"
           sleep 5
           xcrun simctl io "$UDID" screenshot Screenshots/01-onboarding.png
 
           xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
           xcrun simctl spawn "$UDID" defaults write "$APP_BUNDLE_ID" hasCompletedOnboarding -bool true
-          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID"
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" "${LOCALE_ARGS[@]}"
           sleep 5
           xcrun simctl io "$UDID" screenshot Screenshots/02-home.png
 
           xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
-          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-editor
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-editor "${LOCALE_ARGS[@]}"
           sleep 10
           xcrun simctl io "$UDID" screenshot Screenshots/03-demo-board-editor.png
 
           xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
-          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-places
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-places "${LOCALE_ARGS[@]}"
           sleep 10
           xcrun simctl io "$UDID" screenshot Screenshots/04-demo-place-manager.png
 
           xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
-          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-export
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-export "${LOCALE_ARGS[@]}"
           sleep 10
           xcrun simctl io "$UDID" screenshot Screenshots/05-demo-export.png
 
