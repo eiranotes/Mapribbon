@@ -1,0 +1,18 @@
+{
+  "sourceLanguage" : "ko",
+  "strings" : {
+    "보드" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "ボード" } } } },
+    "아틀라스" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "アトラス" } } } },
+    "설정" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "設定" } } } },
+    "새 보드 만들기" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "新しいボードを作る" } } } },
+    "날짜 선택" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "日付を選択" } } } },
+    "미리보기" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "プレビュー" } } } },
+    "저장 및 공유" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存・共有" } } } },
+    "장소와 사진 수정" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "場所と写真を編集" } } } },
+    "찍어둔 사진이,\n하루의 여행 보드가 됩니다." : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "撮った写真が、\n1日の旅ボードになります。" } } } },
+    "내 사진으로 만들어보기" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "自分の写真で作ってみる" } } } },
+    "사진 접근 계속" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "写真へのアクセスを続ける" } } } },
+    "영구 잠금 해제" : { "localizations" : { "ja" : { "stringUnit" : { "state" : "translated", "value" : "永久アンロック" } } } }
+  },
+  "version" : "1.0"
+}
