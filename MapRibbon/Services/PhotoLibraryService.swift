@@ -12,6 +12,20 @@ final class PhotoLibraryService {
     private(set) var isScanning = false
     var errorMessage: String?
 
+    private let screenshotMode: Bool
+
+    init() {
+#if DEBUG
+        screenshotMode = ScreenshotLaunch.isEnabled
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+        }
+#else
+        screenshotMode = false
+#endif
+    }
+
     var canReadLibrary: Bool {
         authorizationStatus == .authorized || authorizationStatus == .limited
     }
@@ -21,10 +35,24 @@ final class PhotoLibraryService {
     }
 
     func refreshAuthorization() {
+#if DEBUG
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+            return
+        }
+#endif
         authorizationStatus = PHPhotoLibrary.authorizationStatus(for: .readWrite)
     }
 
     func requestAccess() async {
+#if DEBUG
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+            return
+        }
+#endif
         authorizationStatus = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         if canReadLibrary {
             await scanRecentDays()
@@ -32,6 +60,14 @@ final class PhotoLibraryService {
     }
 
     func scanRecentDays(lookbackDays: Int = 365) async {
+#if DEBUG
+        if screenshotMode {
+            authorizationStatus = .authorized
+            daySummaries = ScreenshotFixtures.photoDaySummaries
+            isScanning = false
+            return
+        }
+#endif
         refreshAuthorization()
         guard canReadLibrary else {
             daySummaries = []
