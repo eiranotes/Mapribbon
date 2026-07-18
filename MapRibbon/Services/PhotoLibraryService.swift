@@ -111,7 +111,7 @@ final class PhotoImageService {
         return await withCheckedContinuation { continuation in
             let options = PHImageRequestOptions()
             options.isNetworkAccessAllowed = true
-            options.resizeMode = .fast
+            options.resizeMode = highQuality ? .exact : .fast
             options.deliveryMode = highQuality ? .highQualityFormat : .fastFormat
             options.isSynchronous = false
 
@@ -139,6 +139,26 @@ final class PhotoImageService {
                 }
             }
         }
+    }
+
+    func preload(
+        identifiers: [String],
+        targetSize: CGSize,
+        limit: Int? = nil,
+        highQuality: Bool = false
+    ) async -> [String: UIImage] {
+        var output: [String: UIImage] = [:]
+        let ids = limit.map { Array(identifiers.prefix($0)) } ?? identifiers
+        for identifier in ids {
+            if let image = await image(
+                for: identifier,
+                targetSize: targetSize,
+                highQuality: highQuality
+            ) {
+                output[identifier] = image
+            }
+        }
+        return output
     }
 }
 
@@ -168,6 +188,39 @@ enum PhotoSaveError: LocalizedError {
 
     var errorDescription: String? {
         "사진 보관함에 저장할 권한이 없습니다."
+    }
+}
+
+@MainActor
+enum InstagramShareService {
+    static var isAvailable: Bool {
+        guard let url = URL(string: "instagram-stories://share") else { return false }
+        return UIApplication.shared.canOpenURL(url)
+    }
+
+    static func shareStory(image: UIImage) async -> Bool {
+        guard let data = image.pngData(),
+              let url = URL(string: "instagram-stories://share"),
+              UIApplication.shared.canOpenURL(url) else {
+            return false
+        }
+
+        let item: [String: Any] = [
+            "com.instagram.sharedSticker.backgroundImage": data
+        ]
+        UIPasteboard.general.setItems(
+            [item],
+            options: [
+                .expirationDate: Date().addingTimeInterval(5 * 60),
+                .localOnly: true
+            ]
+        )
+
+        return await withCheckedContinuation { continuation in
+            UIApplication.shared.open(url, options: [:]) { opened in
+                continuation.resume(returning: opened)
+            }
+        }
     }
 }
 
