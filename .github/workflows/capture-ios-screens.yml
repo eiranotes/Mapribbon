@@ -120,7 +120,6 @@ jobs:
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
           xcrun simctl privacy "$SIMULATOR_UDID" grant photos com.eiraworks.MapRibbon
-          xcrun simctl privacy "$SIMULATOR_UDID" grant photos-add com.eiraworks.MapRibbon || true
 
       - name: Capture all screens
         shell: bash
