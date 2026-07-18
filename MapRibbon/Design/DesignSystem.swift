@@ -222,7 +222,7 @@ struct MRBottomActionBar<Content: View>: View {
     }
 }
 
-extension Section where Parent == Text, Footer == Text {
+extension Section where Parent == Text, Footer == Text, Content: View {
     init(
         _ title: LocalizedStringKey,
         @ViewBuilder content: () -> Content,
