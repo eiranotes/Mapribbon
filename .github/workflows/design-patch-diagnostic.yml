@@ -1,0 +1,43 @@
+name: Design Patch Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["agent/pinboard-photo-pipeline"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: design-patch-diagnostic-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and validate patch
+        shell: bash
+        run: |
+          set +e
+          : > /tmp/mapribbon-design.patch
+          for part in $(find .ci/design-patch -name 'patch.part*' | sort); do
+            echo "DECODING $part" >> patch-diagnostic.log
+            base64 -D < "$part" >> /tmp/mapribbon-design.patch 2>> patch-diagnostic.log
+            echo "decode-status=$?" >> patch-diagnostic.log
+          done
+          echo "PATCH BYTES $(wc -c < /tmp/mapribbon-design.patch)" >> patch-diagnostic.log
+          patch -p0 --dry-run --verbose < /tmp/mapribbon-design.patch >> patch-diagnostic.log 2>&1
+          echo "patch-status=$?" >> patch-diagnostic.log
+          cat patch-diagnostic.log
+      - name: Upload diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: design-patch-diagnostic-${{ github.run_id }}
+          path: |
+            patch-diagnostic.log
+            /tmp/mapribbon-design.patch
+          retention-days: 3
