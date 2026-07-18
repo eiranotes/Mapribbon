@@ -112,13 +112,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build | tee "$RUNNER_TEMP/xcodebuild.log"
 
-      - name: Install app
+      - name: Install app and grant photo access
         shell: bash
         run: |
           APP_PATH="$RUNNER_TEMP/MapRibbonDerivedData/Build/Products/Debug-iphonesimulator/MapRibbon.app"
           test -d "$APP_PATH"
           echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
           xcrun simctl install "$SIMULATOR_UDID" "$APP_PATH"
+          xcrun simctl privacy "$SIMULATOR_UDID" grant photos com.eiraworks.MapRibbon
+          xcrun simctl privacy "$SIMULATOR_UDID" grant photos-add com.eiraworks.MapRibbon || true
 
       - name: Capture all screens
         shell: bash
@@ -151,7 +153,7 @@ jobs:
               "$SIMULATOR_UDID" \
               com.eiraworks.MapRibbon \
               --screenshot-route "$route"
-            sleep 3
+            sleep 5
             xcrun simctl io "$SIMULATOR_UDID" screenshot --type=png "screenshots/$filename.png"
           done
 
