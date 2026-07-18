@@ -118,6 +118,10 @@ enum ExportFormat: String, CaseIterable, Identifiable {
     var aspectRatio: CGFloat {
         size.width / size.height
     }
+
+    static func resolved(from rawValue: String?) -> ExportFormat {
+        rawValue.flatMap(ExportFormat.init(rawValue:)) ?? .story
+    }
 }
 
 enum GenerationStep: String, CaseIterable, Identifiable {
@@ -156,6 +160,57 @@ struct BoardRenderModel {
 
     var photoCount: Int {
         places.reduce(0) { $0 + $1.photoCount }
+    }
+}
+
+struct ImportedBoardPhoto {
+    let identifier: String
+    let image: UIImage
+}
+
+struct BoardThreadSegment: Equatable {
+    let start: CGPoint
+    let end: CGPoint
+}
+
+enum BoardLayout {
+    private static let tallCenters: [CGPoint] = [
+        CGPoint(x: 0.25, y: 0.34), CGPoint(x: 0.73, y: 0.42),
+        CGPoint(x: 0.29, y: 0.59), CGPoint(x: 0.70, y: 0.69),
+        CGPoint(x: 0.29, y: 0.81), CGPoint(x: 0.72, y: 0.86),
+        CGPoint(x: 0.51, y: 0.50), CGPoint(x: 0.50, y: 0.76)
+    ]
+
+    private static let compactCenters: [CGPoint] = [
+        CGPoint(x: 0.20, y: 0.38), CGPoint(x: 0.50, y: 0.36), CGPoint(x: 0.79, y: 0.40),
+        CGPoint(x: 0.27, y: 0.70), CGPoint(x: 0.60, y: 0.68), CGPoint(x: 0.82, y: 0.73),
+        CGPoint(x: 0.44, y: 0.53), CGPoint(x: 0.68, y: 0.54)
+    ]
+
+    static func isTall(aspectRatio: CGFloat) -> Bool {
+        aspectRatio < 0.68
+    }
+
+    static func cardCenters(count: Int, aspectRatio: CGFloat) -> [CGPoint] {
+        let source = isTall(aspectRatio: aspectRatio) ? tallCenters : compactCenters
+        return Array(source.prefix(max(0, min(count, source.count))))
+    }
+
+    static func pinPoints(count: Int, aspectRatio: CGFloat) -> [CGPoint] {
+        let offset: CGFloat = isTall(aspectRatio: aspectRatio) ? 0.092 : 0.105
+        return cardCenters(count: count, aspectRatio: aspectRatio).map {
+            CGPoint(x: $0.x, y: max(0.20, $0.y - offset))
+        }
+    }
+
+    static func threadSegments(count: Int, aspectRatio: CGFloat) -> [BoardThreadSegment] {
+        let points = pinPoints(count: count, aspectRatio: aspectRatio)
+        guard points.count > 1 else { return [] }
+        return zip(points, points.dropFirst()).map { BoardThreadSegment(start: $0.0, end: $0.1) }
+    }
+
+    static func insertionPoint(index: Int) -> CGPoint {
+        tallCenters[index % tallCenters.count]
     }
 }
 
@@ -203,6 +258,150 @@ final class BoardDraft: Identifiable {
             photoImages: photoImages
         )
     }
+
+    var archivePayload: BoardArchivePayload {
+        BoardArchivePayload(date: date, title: title, places: places, template: template)
+    }
+
+    var fingerprint: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        encoder.dateEncodingStrategy = .millisecondsSince1970
+        return (try? encoder.encode(archivePayload).base64EncodedString()) ?? ""
+    }
+
+    @discardableResult
+    func appendManualPlace(
+        title: String,
+        subtitle: String?,
+        startDate: Date,
+        endDate: Date
+    ) -> UUID {
+        let identifier = UUID()
+        let center = averageCoordinate
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let place = BoardPlace(
+            id: identifier,
+            title: trimmedTitle.isEmpty ? "새 장소" : trimmedTitle,
+            subtitle: subtitle?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            administrativeArea: nil,
+            locality: nil,
+            latitude: center.latitude,
+            longitude: center.longitude,
+            startDate: min(startDate, endDate),
+            endDate: max(startDate, endDate),
+            assetIdentifiers: [],
+            representativeAssetIdentifier: "",
+            isHidden: false
+        )
+        places.append(place)
+        normalizedPoints[identifier] = BoardLayout.insertionPoint(index: places.count - 1)
+        return identifier
+    }
+
+    @discardableResult
+    func appendImportedPhotos(_ photos: [ImportedBoardPhoto], to placeID: UUID? = nil) -> UUID? {
+        guard !photos.isEmpty else { return nil }
+        for photo in photos {
+            photoImages[photo.identifier] = photo.image
+        }
+
+        if let placeID, let index = places.firstIndex(where: { $0.id == placeID }) {
+            let identifiers = photos.map(\.identifier)
+            places[index].assetIdentifiers.append(contentsOf: identifiers)
+            if places[index].representativeAssetIdentifier.isEmpty {
+                places[index].representativeAssetIdentifier = identifiers[0]
+            }
+            return placeID
+        }
+
+        let center = averageCoordinate
+        let identifier = UUID()
+        let importedIdentifiers = photos.map(\.identifier)
+        let place = BoardPlace(
+            id: identifier,
+            title: "추가한 사진",
+            subtitle: "직접 선택한 사진",
+            administrativeArea: nil,
+            locality: nil,
+            latitude: center.latitude,
+            longitude: center.longitude,
+            startDate: date,
+            endDate: date,
+            assetIdentifiers: importedIdentifiers,
+            representativeAssetIdentifier: importedIdentifiers[0],
+            isHidden: false
+        )
+        places.append(place)
+        normalizedPoints[identifier] = BoardLayout.insertionPoint(index: places.count - 1)
+        return identifier
+    }
+
+    func removePhoto(identifier: String, from placeID: UUID) {
+        guard let index = places.firstIndex(where: { $0.id == placeID }) else { return }
+        places[index].assetIdentifiers.removeAll { $0 == identifier }
+        photoImages.removeValue(forKey: identifier)
+        if places[index].representativeAssetIdentifier == identifier {
+            places[index].representativeAssetIdentifier = places[index].assetIdentifiers.first ?? ""
+        }
+    }
+
+    func deletePlace(id: UUID) {
+        guard let place = places.first(where: { $0.id == id }) else { return }
+        places.removeAll { $0.id == id }
+        normalizedPoints.removeValue(forKey: id)
+        let remainingIdentifiers = Set(places.flatMap(\.assetIdentifiers))
+        for identifier in place.assetIdentifiers where !remainingIdentifiers.contains(identifier) {
+            photoImages.removeValue(forKey: identifier)
+        }
+    }
+
+    @discardableResult
+    func mergePlace(sourceID: UUID, into targetID: UUID) -> Bool {
+        guard sourceID != targetID,
+              let sourceIndex = places.firstIndex(where: { $0.id == sourceID }),
+              let targetIndex = places.firstIndex(where: { $0.id == targetID }) else {
+            return false
+        }
+
+        let source = places[sourceIndex]
+        var target = places[targetIndex]
+        let existing = Set(target.assetIdentifiers)
+        target.assetIdentifiers.append(contentsOf: source.assetIdentifiers.filter { !existing.contains($0) })
+        if target.representativeAssetIdentifier.isEmpty {
+            target.representativeAssetIdentifier = source.representativeAssetIdentifier
+        }
+        target.startDate = min(target.startDate, source.startDate)
+        target.endDate = max(target.endDate, source.endDate)
+        if target.subtitle == nil { target.subtitle = source.subtitle }
+        places[targetIndex] = target
+        places.remove(at: sourceIndex)
+        normalizedPoints.removeValue(forKey: sourceID)
+        return true
+    }
+
+    func reorderPlaces(fromOffsets source: IndexSet, toOffset destination: Int) {
+        let moving = source.sorted().map { places[$0] }
+        for index in source.sorted(by: >) {
+            places.remove(at: index)
+        }
+        let removedBeforeDestination = source.filter { $0 < destination }.count
+        let insertion = max(0, min(places.count, destination - removedBeforeDestination))
+        places.insert(contentsOf: moving, at: insertion)
+    }
+
+    private var averageCoordinate: CLLocationCoordinate2D {
+        guard !places.isEmpty else {
+            return CLLocationCoordinate2D(latitude: 37.5665, longitude: 126.9780)
+        }
+        let latitude = places.reduce(0) { $0 + $1.latitude } / Double(places.count)
+        let longitude = places.reduce(0) { $0 + $1.longitude } / Double(places.count)
+        return CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 struct BoardArchivePayload: Codable {
