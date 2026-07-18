@@ -9,6 +9,13 @@ on:
       - "MapRibbon/**"
       - "MapRibbon.xcodeproj/**"
       - ".github/workflows/capture-ios-screens.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "MapRibbon/**"
+      - "MapRibbon.xcodeproj/**"
+      - ".github/workflows/capture-ios-screens.yml"
 
 permissions:
   contents: read
