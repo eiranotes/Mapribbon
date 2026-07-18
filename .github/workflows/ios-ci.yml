@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ios-ci-${{ github.workflow }}-${{ github.ref }}
@@ -32,26 +32,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Apply staged pinboard redesign
-        if: ${{ hashFiles('.ci/design-patch/patch.part*') != '' }}
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git checkout -B agent/pinboard-photo-pipeline origin/agent/pinboard-photo-pipeline
-          : > /tmp/mapribbon-design.patch
-          for part in $(find .ci/design-patch -name 'patch.part*' | sort); do
-            base64 -D < "$part" >> /tmp/mapribbon-design.patch
-          done
-          patch -p0 --forward < /tmp/mapribbon-design.patch
-          rm -rf .ci/design-patch .ci/source-patches
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MapRibbon MapRibbonTests .ci
-          git commit -m "feat: render tactile multi-photo pinboards"
-          git push origin HEAD:agent/pinboard-photo-pipeline
 
       - name: Select Xcode 16.4
         run: |
