@@ -222,6 +222,20 @@ struct MRBottomActionBar<Content: View>: View {
     }
 }
 
+extension Section where Parent == Text, Footer == Text {
+    init(
+        _ title: LocalizedStringKey,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder footer: () -> Footer
+    ) {
+        self.init(
+            content: content,
+            header: { Text(title) },
+            footer: footer
+        )
+    }
+}
+
 extension Date {
     var mrDayTitle: String {
         formatted(.dateTime.year().month().day().weekday(.abbreviated))
