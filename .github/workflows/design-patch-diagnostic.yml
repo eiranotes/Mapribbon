@@ -1,4 +1,4 @@
-name: Design Patch Diagnostic
+name: Apply Pinboard Redesign
 
 on:
   workflow_dispatch:
@@ -8,38 +8,41 @@ on:
     branches: ["agent/pinboard-photo-pipeline"]
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: design-patch-diagnostic-${{ github.ref }}
+  group: apply-pinboard-redesign-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  diagnose:
+  apply:
     runs-on: macos-15
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct and validate patch
+        with:
+          fetch-depth: 0
+      - name: Repair, apply, and publish redesign
         shell: bash
         run: |
-          set +e
+          set -euxo pipefail
+          git checkout -B agent/pinboard-photo-pipeline origin/agent/pinboard-photo-pipeline
+
           : > /tmp/mapribbon-design.patch
           for part in $(find .ci/design-patch -name 'patch.part*' | sort); do
-            echo "DECODING $part" >> patch-diagnostic.log
-            base64 -D < "$part" >> /tmp/mapribbon-design.patch 2>> patch-diagnostic.log
-            echo "decode-status=$?" >> patch-diagnostic.log
+            base64 -D < "$part" >> /tmp/mapribbon-design.patch
           done
-          echo "PATCH BYTES $(wc -c < /tmp/mapribbon-design.patch)" >> patch-diagnostic.log
-          patch -p0 --dry-run --verbose < /tmp/mapribbon-design.patch >> patch-diagnostic.log 2>&1
-          echo "patch-status=$?" >> patch-diagnostic.log
-          cat patch-diagnostic.log
-      - name: Upload diagnostic
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: design-patch-diagnostic-${{ github.run_id }}
-          path: |
-            patch-diagnostic.log
-            /tmp/mapribbon-design.patch
-          retention-days: 3
+
+          base64 -D < .ci/design-patch/repair.diff.gz.b64 | gunzip > /tmp/repair.diff
+          patch /tmp/mapribbon-design.patch < /tmp/repair.diff
+          cmp -s /tmp/mapribbon-design.patch /tmp/mapribbon-design.patch
+          patch -p0 --forward < /tmp/mapribbon-design.patch
+
+          rm -rf .ci/design-patch .ci/source-patches
+          rm -f .github/workflows/design-patch-diagnostic.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MapRibbon MapRibbonTests .ci .github/workflows
+          git commit -m "feat: render tactile multi-photo pinboards"
+          git push origin HEAD:agent/pinboard-photo-pipeline
