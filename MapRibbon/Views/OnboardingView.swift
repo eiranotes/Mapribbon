@@ -110,7 +110,7 @@ private struct FeatureRow: View {
     }
 }
 
-private struct PermissionExplainerView: View {
+struct PermissionExplainerView: View {
     let isRequesting: Bool
     let onContinue: () -> Void
     let onContinueWithoutAccess: () -> Void
