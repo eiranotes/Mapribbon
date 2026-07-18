@@ -18,7 +18,7 @@ jobs:
   build-and-test:
     name: Build, test and capture (Xcode 16.4)
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 45
 
     env:
       PROJECT: MapRibbon.xcodeproj
@@ -121,6 +121,21 @@ jobs:
           xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID"
           sleep 5
           xcrun simctl io "$UDID" screenshot Screenshots/02-home.png
+
+          xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-editor
+          sleep 10
+          xcrun simctl io "$UDID" screenshot Screenshots/03-demo-board-editor.png
+
+          xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-places
+          sleep 10
+          xcrun simctl io "$UDID" screenshot Screenshots/04-demo-place-manager.png
+
+          xcrun simctl terminate "$UDID" "$APP_BUNDLE_ID" || true
+          xcrun simctl launch --terminate-running-process "$UDID" "$APP_BUNDLE_ID" --ci-demo-export
+          sleep 10
+          xcrun simctl io "$UDID" screenshot Screenshots/05-demo-export.png
 
           file Screenshots/*.png
 
