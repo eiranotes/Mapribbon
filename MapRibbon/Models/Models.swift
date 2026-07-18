@@ -274,17 +274,9 @@ final class BoardDraft: Identifiable {
         )
     }
 
-    var allSourceIdentifiers: [String] {
-        sourceAssets.map(\.id)
-    }
-
-    var assignedIdentifiers: Set<String> {
-        Set(places.flatMap(\.assetIdentifiers))
-    }
-
-    var unassignedIdentifiers: [String] {
-        allSourceIdentifiers.filter { !assignedIdentifiers.contains($0) }
-    }
+    var allSourceIdentifiers: [String] { sourceAssets.map(\.id) }
+    var assignedIdentifiers: Set<String> { Set(places.flatMap(\.assetIdentifiers)) }
+    var unassignedIdentifiers: [String] { allSourceIdentifiers.filter { !assignedIdentifiers.contains($0) } }
 
     func asset(for identifier: String) -> PhotoAssetSnapshot? {
         sourceAssets.first { $0.id == identifier }
@@ -375,8 +367,8 @@ final class BoardDraft: Identifiable {
         }
         previous.sourceAssetIdentifiers = Array(Set(previous.availableAssetIdentifiers + current.availableAssetIdentifiers))
         previous.endDate = max(previous.endDate, current.endDate)
-        if previous.assetIdentifiers.isEmpty == false,
-           previous.assetIdentifiers.contains(previous.representativeAssetIdentifier) == false {
+        if !previous.assetIdentifiers.isEmpty,
+           !previous.assetIdentifiers.contains(previous.representativeAssetIdentifier) {
             previous.representativeAssetIdentifier = previous.assetIdentifiers[0]
         }
         places[index - 1] = previous
@@ -388,11 +380,11 @@ final class BoardDraft: Identifiable {
     func isRepeatedLocation(at index: Int) -> Bool {
         guard places.indices.contains(index) else { return false }
         let location = CLLocation(latitude: places[index].latitude, longitude: places[index].longitude)
-        return places.indices.contains { otherIndex in
-            guard otherIndex != index else { return false }
+        for otherIndex in places.indices where otherIndex != index {
             let other = CLLocation(latitude: places[otherIndex].latitude, longitude: places[otherIndex].longitude)
-            return location.distance(from: other) < 180
+            if location.distance(from: other) < 180 { return true }
         }
+        return false
     }
 
     private func refreshDates(for index: Int) {
@@ -448,15 +440,11 @@ final class SavedBoard {
         self.regionKeysJSON = regionKeysJSON
     }
 
-    var template: BoardTemplate {
-        BoardTemplate(rawValue: templateRawValue) ?? .pinboard
-    }
+    var template: BoardTemplate { BoardTemplate(rawValue: templateRawValue) ?? .pinboard }
 
     var regionKeys: [String] {
         guard let data = regionKeysJSON.data(using: .utf8),
-              let keys = try? JSONDecoder().decode([String].self, from: data) else {
-            return []
-        }
+              let keys = try? JSONDecoder().decode([String].self, from: data) else { return [] }
         return keys
     }
 }
