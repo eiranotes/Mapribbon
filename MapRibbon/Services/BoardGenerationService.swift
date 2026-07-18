@@ -14,16 +14,12 @@ struct PhotoClusterer {
             CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
         }
 
-        var startDate: Date {
-            assets.first?.creationDate ?? .distantPast
-        }
-
-        var endDate: Date {
-            assets.last?.creationDate ?? .distantPast
-        }
+        var startDate: Date { assets.first?.creationDate ?? .distantPast }
+        var endDate: Date { assets.last?.creationDate ?? .distantPast }
 
         mutating func append(_ asset: PhotoAssetSnapshot) {
             assets.append(asset)
+            assets.sort { $0.creationDate < $1.creationDate }
             recalculateCentroid()
         }
 
@@ -42,8 +38,8 @@ struct PhotoClusterer {
 
     static func cluster(
         _ input: [PhotoAssetSnapshot],
-        distanceThreshold: CLLocationDistance = 420,
-        timeGap: TimeInterval = 2.5 * 60 * 60,
+        distanceThreshold: CLLocationDistance = 360,
+        timeGap: TimeInterval = 2 * 60 * 60,
         maxClusters: Int = 8
     ) -> [Cluster] {
         let assets = input
@@ -51,14 +47,8 @@ struct PhotoClusterer {
             .sorted { $0.creationDate < $1.creationDate }
 
         guard let first = assets.first else { return [] }
-
         var clusters: [Cluster] = [
-            Cluster(
-                id: UUID(),
-                assets: [first],
-                latitude: first.latitude,
-                longitude: first.longitude
-            )
+            Cluster(id: UUID(), assets: [first], latitude: first.latitude, longitude: first.longitude)
         ]
 
         for asset in assets.dropFirst() {
@@ -72,18 +62,11 @@ struct PhotoClusterer {
                 clusters.append(current)
             } else {
                 clusters.append(current)
-                clusters.append(
-                    Cluster(
-                        id: UUID(),
-                        assets: [asset],
-                        latitude: asset.latitude,
-                        longitude: asset.longitude
-                    )
-                )
+                clusters.append(Cluster(id: UUID(), assets: [asset], latitude: asset.latitude, longitude: asset.longitude))
             }
         }
 
-        clusters = mergeAdjacentNearby(clusters)
+        clusters = mergeOnlyContinuousNearby(clusters)
 
         while clusters.count > maxClusters {
             guard let pairIndex = nearestAdjacentPair(in: clusters) else { break }
@@ -95,7 +78,7 @@ struct PhotoClusterer {
         return clusters
     }
 
-    private static func mergeAdjacentNearby(_ source: [Cluster]) -> [Cluster] {
+    private static func mergeOnlyContinuousNearby(_ source: [Cluster]) -> [Cluster] {
         guard !source.isEmpty else { return [] }
         var output: [Cluster] = []
 
@@ -109,7 +92,9 @@ struct PhotoClusterer {
                 .distance(from: CLLocation(latitude: cluster.latitude, longitude: cluster.longitude))
             let gap = cluster.startDate.timeIntervalSince(previous.endDate)
 
-            if distance <= 190 && gap <= 5 * 60 * 60 {
+            // Keep a later revisit as a separate stop. This is important for routes such as
+            // hotel -> city -> hotel, where identical coordinates mean different moments.
+            if distance <= 110 && gap <= 75 * 60 {
                 previous.absorb(cluster)
                 output.append(previous)
             } else {
@@ -117,7 +102,6 @@ struct PhotoClusterer {
                 output.append(cluster)
             }
         }
-
         return output
     }
 
@@ -131,21 +115,19 @@ struct PhotoClusterer {
             let distance = CLLocation(latitude: left.latitude, longitude: left.longitude)
                 .distance(from: CLLocation(latitude: right.latitude, longitude: right.longitude))
             let time = right.startDate.timeIntervalSince(left.endDate)
-            let score = distance + max(0, time / 60)
-            if result == nil || score < result!.score {
-                result = (index, score)
-            }
+            let revisitPenalty = distance < 160 && time > 90 * 60 ? 100_000.0 : 0
+            let score = distance + max(0, time / 60) + revisitPenalty
+            if result == nil || score < result!.score { result = (index, score) }
         }
-
         return result?.index
     }
 
     static func representative(in assets: [PhotoAssetSnapshot]) -> PhotoAssetSnapshot? {
         guard !assets.isEmpty else { return nil }
-        let medianTime = assets[assets.count / 2].creationDate
-
-        return assets.max { lhs, rhs in
-            representativeScore(lhs, medianTime: medianTime) < representativeScore(rhs, medianTime: medianTime)
+        let ordered = assets.sorted { $0.creationDate < $1.creationDate }
+        let medianTime = ordered[ordered.count / 2].creationDate
+        return ordered.max {
+            representativeScore($0, medianTime: medianTime) < representativeScore($1, medianTime: medianTime)
         }
     }
 
@@ -166,7 +148,8 @@ struct MapSnapshotResult {
 @MainActor
 final class MapSnapshotService {
     func snapshot(for places: [BoardPlace], size: CGSize) async throws -> MapSnapshotResult {
-        let coordinates = places.map(\.coordinate)
+        let visible = places.filter { !$0.isHidden }
+        let coordinates = visible.map(\.coordinate)
         let options = MKMapSnapshotter.Options()
         options.size = size
         options.scale = 2
@@ -193,14 +176,13 @@ final class MapSnapshotService {
         }
 
         var points: [UUID: CGPoint] = [:]
-        for place in places {
+        for place in visible {
             let point = snapshot.point(for: place.coordinate)
             points[place.id] = CGPoint(
-                x: min(1, max(0, point.x / size.width)),
-                y: min(1, max(0, point.y / size.height))
+                x: min(0.94, max(0.06, point.x / size.width)),
+                y: min(0.91, max(0.11, point.y / size.height))
             )
         }
-
         return MapSnapshotResult(image: snapshot.image, normalizedPoints: points)
     }
 
@@ -218,18 +200,10 @@ final class MapSnapshotService {
         let maxLat = latitudes.max() ?? first.latitude
         let minLon = longitudes.min() ?? first.longitude
         let maxLon = longitudes.max() ?? first.longitude
-
-        let center = CLLocationCoordinate2D(
-            latitude: (minLat + maxLat) / 2,
-            longitude: (minLon + maxLon) / 2
-        )
-        let latitudeDelta = max(0.015, (maxLat - minLat) * 1.55)
-        let longitudeDelta = max(0.015, (maxLon - minLon) * 1.55)
-
-        return MKCoordinateRegion(
-            center: center,
-            span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta)
-        )
+        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
+        let latitudeDelta = max(0.018, (maxLat - minLat) * 1.70)
+        let longitudeDelta = max(0.018, (maxLon - minLon) * 1.70)
+        return MKCoordinateRegion(center: center, span: MKCoordinateSpan(latitudeDelta: latitudeDelta, longitudeDelta: longitudeDelta))
     }
 }
 
@@ -246,13 +220,9 @@ final class BoardGenerationService {
         try Task.checkCancellation()
 
         let clusters = PhotoClusterer.cluster(summary.assets)
-        guard !clusters.isEmpty else {
-            throw BoardGenerationError.notEnoughLocatedPhotos
-        }
+        guard !clusters.isEmpty else { throw BoardGenerationError.notEnoughLocatedPhotos }
 
         progress(.groupingPlaces, 0.28)
-        try Task.checkCancellation()
-
         var places: [BoardPlace] = []
         for (index, cluster) in clusters.enumerated() {
             let representative = PhotoClusterer.representative(in: cluster.assets) ?? cluster.assets[0]
@@ -270,31 +240,32 @@ final class BoardGenerationService {
                     endDate: cluster.endDate,
                     assetIdentifiers: cluster.assets.map(\.id),
                     representativeAssetIdentifier: representative.id,
-                    isHidden: false
+                    isHidden: false,
+                    sourceAssetIdentifiers: cluster.assets.map(\.id),
+                    note: nil
                 )
             )
             progress(.namingPlaces, 0.30 + (Double(index + 1) / Double(max(1, clusters.count))) * 0.22)
         }
 
-        try Task.checkCancellation()
         progress(.preparingMap, 0.58)
         let mapResult = try await mapService.snapshot(for: places, size: CGSize(width: 900, height: 1200))
 
-        var images: [String: UIImage] = [:]
-        for (index, place) in places.enumerated() {
-            if let image = await imageService.image(
-                for: place.representativeAssetIdentifier,
-                targetSize: CGSize(width: 760, height: 760),
-                highQuality: true
-            ) {
-                images[place.representativeAssetIdentifier] = image
+        let imageIdentifiers = summary.assets
+            .sorted { lhs, rhs in
+                if lhs.isFavorite != rhs.isFavorite { return lhs.isFavorite }
+                return lhs.creationDate < rhs.creationDate
             }
-            progress(.composingBoard, 0.66 + (Double(index + 1) / Double(max(1, places.count))) * 0.30)
-        }
+            .map(\.id)
+        let images = await imageService.preload(
+            identifiers: imageIdentifiers,
+            targetSize: CGSize(width: 760, height: 760),
+            limit: 60,
+            highQuality: true
+        )
+        progress(.composingBoard, 0.96)
 
-        let primaryLocality = places
-            .compactMap { $0.locality ?? $0.administrativeArea }
-            .first
+        let primaryLocality = places.compactMap { $0.locality ?? $0.administrativeArea }.first
         let title = primaryLocality.map { "\($0) 하루 여행" } ?? "하루 여행"
 
         progress(.composingBoard, 1.0)
@@ -302,11 +273,18 @@ final class BoardGenerationService {
             date: summary.date,
             title: title,
             places: places,
-            template: .ribbon,
+            template: .pinboard,
             mapImage: mapResult.image,
             normalizedPoints: mapResult.normalizedPoints,
-            photoImages: images
+            photoImages: images,
+            sourceAssets: summary.assets
         )
+    }
+
+    func refreshMap(for draft: BoardDraft) async throws {
+        let result = try await mapService.snapshot(for: draft.places, size: CGSize(width: 900, height: 1200))
+        draft.mapImage = result.image
+        draft.normalizedPoints = result.normalizedPoints
     }
 
     private func reverseGeocode(_ coordinate: CLLocationCoordinate2D, fallbackIndex: Int) async -> PlaceName {
@@ -316,20 +294,13 @@ final class BoardGenerationService {
                 CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude),
                 preferredLocale: Locale.autoupdatingCurrent
             )
-            guard let placemark = placemarks.first else {
-                return fallbackName(fallbackIndex)
-            }
-
-            let title = placemark.subLocality
-                ?? placemark.name
-                ?? placemark.locality
-                ?? "장소 \(fallbackIndex + 1)"
+            guard let placemark = placemarks.first else { return fallbackName(fallbackIndex) }
+            let title = placemark.subLocality ?? placemark.name ?? placemark.locality ?? "장소 \(fallbackIndex + 1)"
             let subtitle = [placemark.locality, placemark.administrativeArea]
                 .compactMap { $0 }
                 .filter { $0 != title }
                 .prefix(2)
                 .joined(separator: " · ")
-
             return PlaceName(
                 title: title,
                 subtitle: subtitle.isEmpty ? nil : subtitle,
@@ -342,12 +313,7 @@ final class BoardGenerationService {
     }
 
     private func fallbackName(_ index: Int) -> PlaceName {
-        PlaceName(
-            title: "장소 \(index + 1)",
-            subtitle: nil,
-            administrativeArea: nil,
-            locality: nil
-        )
+        PlaceName(title: "장소 \(index + 1)", subtitle: nil, administrativeArea: nil, locality: nil)
     }
 }
 
@@ -357,10 +323,8 @@ enum BoardGenerationError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .notEnoughLocatedPhotos:
-            return "위치 정보가 있는 사진이 충분하지 않습니다."
-        case .mapUnavailable:
-            return "지도를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
+        case .notEnoughLocatedPhotos: return "위치 정보가 있는 사진이 충분하지 않습니다."
+        case .mapUnavailable: return "지도를 불러오지 못했습니다. 잠시 후 다시 시도해주세요."
         }
     }
 }
