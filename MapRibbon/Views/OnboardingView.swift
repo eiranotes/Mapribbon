@@ -1,5 +1,6 @@
 import SwiftUI
 import Photos
+import UIKit
 
 struct OnboardingView: View {
     @Environment(PhotoLibraryService.self) private var photoLibrary
@@ -34,7 +35,7 @@ struct OnboardingView: View {
                     DemoBoardView()
                         .frame(maxWidth: 360)
                         .aspectRatio(0.68, contentMode: .fit)
-                        .shadow(color: .black.opacity(0.08), radius: 18, y: 8)
+                        .shadow(color: MRColor.ink.opacity(0.08), radius: 18, y: 8)
 
                     VStack(alignment: .leading, spacing: 10) {
                         Text("찍어둔 사진이,\n하루의 여행 보드가 됩니다.")
@@ -50,7 +51,7 @@ struct OnboardingView: View {
 
                     VStack(spacing: 12) {
                         FeatureRow(symbol: "mappin", title: "사진 속 장소 자동 발견")
-                        FeatureRow(symbol: "point.topleft.down.to.point.bottomright.curvepath", title: "시간순 리본 연결")
+                        FeatureRow(symbol: "point.topleft.down.to.point.bottomright.curvepath", title: "시간순 직선 실 연결")
                         FeatureRow(symbol: "square.and.arrow.up", title: "고화질 포토보드 저장과 공유")
                     }
 
@@ -147,7 +148,7 @@ struct PermissionExplainerView: View {
 
             Button(action: onContinue) {
                 if isRequesting {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(MRColor.paper)
                 } else {
                     Text("사진 접근 계속")
                 }
@@ -168,97 +169,100 @@ struct PermissionExplainerView: View {
 }
 
 private struct DemoBoardView: View {
-    private let points = [
-        CGPoint(x: 0.20, y: 0.64),
-        CGPoint(x: 0.37, y: 0.43),
-        CGPoint(x: 0.67, y: 0.50),
-        CGPoint(x: 0.77, y: 0.28)
-    ]
+    private let model = DemoBoardFactory.makeModel()
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(Color(hex: 0xEAE4D8))
-
-                MapPaperPattern()
-
-                Path { path in
-                    guard let first = points.first else { return }
-                    path.move(to: CGPoint(x: first.x * proxy.size.width, y: first.y * proxy.size.height))
-                    for point in points.dropFirst() {
-                        path.addLine(to: CGPoint(x: point.x * proxy.size.width, y: point.y * proxy.size.height))
-                    }
-                }
-                .stroke(MRColor.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [8, 7]))
-
-                ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-                    Circle()
-                        .fill(MRColor.accent)
-                        .frame(width: 18, height: 18)
-                        .overlay(Text("\(index + 1)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white))
-                        .position(x: point.x * proxy.size.width, y: point.y * proxy.size.height)
-                }
-
-                SamplePhotoCard(symbol: "building.2", tint: Color(hex: 0xA9C7CF))
-                    .frame(width: proxy.size.width * 0.34, height: proxy.size.height * 0.19)
-                    .rotationEffect(.degrees(-4))
-                    .position(x: proxy.size.width * 0.25, y: proxy.size.height * 0.25)
-
-                SamplePhotoCard(symbol: "ferry", tint: Color(hex: 0x7AA9BE))
-                    .frame(width: proxy.size.width * 0.32, height: proxy.size.height * 0.18)
-                    .rotationEffect(.degrees(4))
-                    .position(x: proxy.size.width * 0.70, y: proxy.size.height * 0.70)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("BUSAN · DAY 1")
-                        .font(.system(size: 11, weight: .semibold))
-                    Text("부산 하루 여행")
-                        .font(.system(size: 24, weight: .bold))
-                }
-                .foregroundStyle(MRColor.ink)
-                .position(x: proxy.size.width * 0.38, y: proxy.size.height * 0.10)
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-        }
+        BoardCanvasView(model: model, watermark: false)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
-private struct MapPaperPattern: View {
-    var body: some View {
-        Canvas { context, size in
-            let line = Color(hex: 0xCEC6B9).opacity(0.55)
-            for i in 0..<9 {
-                var path = Path()
-                let y = size.height * CGFloat(i + 1) / 10
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addCurve(
-                    to: CGPoint(x: size.width, y: y + CGFloat((i % 2) * 8 - 4)),
-                    control1: CGPoint(x: size.width * 0.35, y: y - 14),
-                    control2: CGPoint(x: size.width * 0.65, y: y + 14)
+@MainActor
+private enum DemoBoardFactory {
+    static func makeModel() -> BoardRenderModel {
+        let ids = [
+            UUID(uuidString: "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")!,
+            UUID(uuidString: "BBBBBBBB-BBBB-BBBB-BBBB-BBBBBBBBBBBB")!,
+            UUID(uuidString: "CCCCCCCC-CCCC-CCCC-CCCC-CCCCCCCCCCCC")!
+        ]
+        let date = Date(timeIntervalSince1970: 1_781_568_000)
+        let titles = ["해운대", "흰여울길", "광안리"]
+        let symbols = ["water.waves", "house.fill", "moon.stars.fill"]
+        var images: [String: UIImage] = [:]
+        var places: [BoardPlace] = []
+
+        for index in ids.indices {
+            let assetIDs = (1...3).map { "onboarding-\(index)-\($0)" }
+            for assetID in assetIDs {
+                images[assetID] = demoPhoto(symbol: symbols[index], variant: index)
+            }
+            places.append(
+                BoardPlace(
+                    id: ids[index],
+                    title: titles[index],
+                    subtitle: nil,
+                    administrativeArea: "부산광역시",
+                    locality: titles[index],
+                    latitude: 35.16 + Double(index) * 0.01,
+                    longitude: 129.04 + Double(index) * 0.01,
+                    startDate: date.addingTimeInterval(Double(index) * 7_200),
+                    endDate: date.addingTimeInterval(Double(index) * 7_200 + 2_400),
+                    assetIdentifiers: assetIDs,
+                    representativeAssetIdentifier: assetIDs[0],
+                    isHidden: false
                 )
-                context.stroke(path, with: .color(line), lineWidth: 1)
-            }
+            )
+        }
+
+        return BoardRenderModel(
+            id: UUID(uuidString: "DDDDDDDD-DDDD-DDDD-DDDD-DDDDDDDDDDDD")!,
+            title: "부산 하루 여행",
+            date: date,
+            places: places,
+            template: .ribbon,
+            mapImage: demoMap(),
+            normalizedPoints: [:],
+            photoImages: images
+        )
+    }
+
+    private static func demoPhoto(symbol: String, variant: Int) -> UIImage {
+        let size = CGSize(width: 500, height: 420)
+        return UIGraphicsImageRenderer(size: size).image { context in
+            let palette = [
+                UIColor(red: 0.79, green: 0.34, blue: 0.26, alpha: 1),
+                UIColor(red: 0.30, green: 0.28, blue: 0.25, alpha: 1),
+                UIColor(red: 0.78, green: 0.73, blue: 0.64, alpha: 1)
+            ]
+            palette[variant % palette.count].setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            UIColor.white.withAlphaComponent(0.16).setFill()
+            UIBezierPath(ovalIn: CGRect(x: 80, y: 42, width: 340, height: 340)).fill()
+            let configuration = UIImage.SymbolConfiguration(pointSize: 125, weight: .semibold)
+            UIImage(systemName: symbol, withConfiguration: configuration)?
+                .withTintColor(.white, renderingMode: .alwaysOriginal)
+                .draw(in: CGRect(x: 187, y: 135, width: 126, height: 126))
         }
     }
-}
 
-private struct SamplePhotoCard: View {
-    let symbol: String
-    let tint: Color
-
-    var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                tint
-                Image(systemName: symbol)
-                    .font(.system(size: 30, weight: .semibold))
-                    .foregroundStyle(.white.opacity(0.9))
+    private static func demoMap() -> UIImage {
+        let size = CGSize(width: 720, height: 1_080)
+        return UIGraphicsImageRenderer(size: size).image { context in
+            UIColor(red: 0.94, green: 0.92, blue: 0.87, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            let cg = context.cgContext
+            cg.setStrokeColor(UIColor(red: 0.15, green: 0.14, blue: 0.12, alpha: 0.10).cgColor)
+            cg.setLineWidth(3)
+            for x in stride(from: 30, through: 690, by: 85) {
+                cg.move(to: CGPoint(x: x, y: 0))
+                cg.addLine(to: CGPoint(x: x - 90, y: 1_080))
+                cg.strokePath()
             }
-            Rectangle().fill(.white).frame(height: 16)
+            for y in stride(from: 60, through: 1_020, by: 100) {
+                cg.move(to: CGPoint(x: 0, y: y))
+                cg.addLine(to: CGPoint(x: 720, y: y + 45))
+                cg.strokePath()
+            }
         }
-        .padding(5)
-        .background(.white)
-        .shadow(color: .black.opacity(0.12), radius: 5, y: 3)
     }
 }
