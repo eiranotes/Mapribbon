@@ -1,0 +1,145 @@
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 11) {
+                    Button {
+                        Task { if let image = await render() { onExport(image, .save) } }
+                    } label: { Label("저장", systemImage: "square.and.arrow.down") }
+                    .buttonStyle(MRSecondaryButtonStyle())
+
+                    Button {
+                        Task { if let image = await render() { onExport(image, .share) } }
+                    } label: { Label("공유", systemImage: "square.and.arrow.up") }
+                    .buttonStyle(MRPrimaryButtonStyle())
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
+                .background(.ultraThinMaterial)
+                .overlay(alignment: .top) { Divider() }
+            }
+            .overlay {
+                if isRendering {
+                    ZStack {
+                        Color.black.opacity(0.08).ignoresSafeArea()
+                        ProgressView("고화질 이미지 만드는 중")
+                            .padding(22)
+                            .background(.regularMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    }
+                }
+            }
+            .onAppear {
+                format = ExportFormat(rawValue: defaultFormat) ?? .story
+            }
+            .onChange(of: format) { _, newValue in
+                defaultFormat = newValue.rawValue
+            }
+        }
+    }
+
+    @MainActor
+    private func render() async -> UIImage? {
+        isRendering = true
+        defer { isRendering = false }
+        let content = BoardCanvasView(model: draft.renderModel, watermark: !store.isUnlocked)
+            .frame(width: format.size.width, height: format.size.height)
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = 1
+        renderer.proposedSize = ProposedViewSize(format.size)
+        return renderer.uiImage
+    }
+}
+
+struct PlaceManagerView: View''',
+    "export sheet",
+)
+
+replace_block(
+    "MapRibbon/Views/BoardViews.swift",
+    r"struct PlaceManagerView: View \{.*?\n\}\n\n\nprivate struct BoardRouteSegment",
+    r'''
+struct PlaceManagerView: View {
+    @Bindable var draft: BoardDraft
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach($draft.places) { $place in
+                        HStack(spacing: 10) {
+                            NavigationLink {
+                                PlaceEditorView(place: $place, draft: draft)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    AssetThumbnailView(identifier: place.representativeAssetIdentifier, size: CGSize(width: 58, height: 58))
+                                        .frame(width: 58, height: 58)
+                                        .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                        .opacity(place.isHidden ? 0.36 : 1)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(place.title).font(.subheadline.weight(.semibold))
+                                        Text("사진 \(place.photoCount)장 · \(place.startDate.formatted(date: .omitted, time: .shortened))")
+                                            .font(.caption)
+                                            .foregroundStyle(MRColor.secondaryText)
+                                    }
+                                }
+                            }
+                            Button {
+                                place.isHidden.toggle()
+                            } label: {
+                                Image(systemName: place.isHidden ? "eye.slash" : "eye")
+                                    .foregroundStyle(place.isHidden ? MRColor.secondaryText : MRColor.accent)
+                                    .frame(width: 36, height: 36)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(place.isHidden ? "보드에 표시" : "보드에서 숨기기")
+                        }
+                    }
+                    .onMove { source, destination in
+                        draft.places.move(fromOffsets: source, toOffset: destination)
+                    }
+                } footer: {
+                    Text("오른쪽 핸들을 끌어 방문 순서를 바꾸고, 눈 아이콘으로 표시 여부를 정합니다.")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("장소와 사진")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } }
+            }
+        }
+    }
+}
+
+struct PlaceEditorView: View {
+    @Binding var place: BoardPlace
+    @Bindable var draft: BoardDraft
+
+    var body: some View {
+        Form {
+            Section("장소") {
+                TextField("장소 이름", text: $place.title)
+                TextField("설명", text: Binding($place.subtitle, replacingNilWith: ""))
+                Toggle("보드에 표시", isOn: Binding(get: { !place.isHidden }, set: { place.isHidden = !$0 }))
+            }
+
+            Section("대표 사진") {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(place.assetIdentifiers, id: \.self) { identifier in
+                        Button {
+                            Task {
+                                if let image = await PhotoImageService.shared.image(for: identifier, targetSize: CGSize(width: 700, height: 700), highQuality: true) {
+                                    place.representativeAssetIdentifier = identifier
+                                    draft.photoImages[identifier] = image
+                                }
+                            }
+                        } label: {
+                            AssetThumbnailView(identifier: identifier, size: CGSize(width: 180, height: 180))
+                                .aspectRatio(1, contentMode: .fill)
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .overlay {
+                                    RoundedRectangle(cornerRadius: 9)
+                                        .stroke(place.representativeAssetIdentifier == identifier ? MRColor.accent : .clear, lineWidth: 3)
+                                }
+                                .overlay(alignment: .bottomTrailing) {
+                                    if place.representativeAssetIdentifier == identifier {
