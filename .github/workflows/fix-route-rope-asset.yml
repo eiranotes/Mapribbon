@@ -1,0 +1,45 @@
+name: Fix route rope asset
+
+on:
+  push:
+    branches:
+      - feat/textured-route-materials
+    paths:
+      - Scripts/RouteMaterialFix/**
+      - .github/workflows/fix-route-rope-asset.yml
+
+permissions:
+  contents: write
+
+jobs:
+  replace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decode RGBA rope image
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          from pathlib import Path
+          source = Path('Scripts/RouteMaterialFix/RouteRopeRed.png.b64')
+          target = Path('MapRibbon/Resources/Assets.xcassets/RouteRopeRed.imageset/RouteRopeRed.png')
+          target.write_bytes(base64.b64decode(source.read_text(encoding='ascii')))
+          PY
+
+      - name: Remove one-time fix files
+        run: rm -rf Scripts/RouteMaterialFix .github/workflows/fix-route-rope-asset.yml
+
+      - name: Commit replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: use actool-compatible RGBA rope texture"
+          git push
