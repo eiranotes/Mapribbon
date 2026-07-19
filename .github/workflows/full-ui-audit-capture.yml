@@ -1,6 +1,7 @@
 name: Full UI audit capture
 
 on:
+  pull_request:
   push:
     branches:
       - agent/full-ui-audit-captures
