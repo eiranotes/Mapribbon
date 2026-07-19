@@ -29,6 +29,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          xcodebuild -version
+          xcodebuild -showsdks
           DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           payload = json.load(sys.stdin)
@@ -89,14 +91,14 @@ jobs:
           xcrun simctl boot "$UDID" 2>/dev/null || true
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl ui "$UDID" appearance light || true
-          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState discharging --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
           xcrun simctl install "$UDID" "$APP_PATH"
           xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
 
           capture() {
             local flag="$1"
             local name="$2"
-            xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" "$flag"
+            xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" "$flag" -AppleLanguages "(ko)" -AppleLocale "ko_KR"
             sleep 3
             xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
           }
