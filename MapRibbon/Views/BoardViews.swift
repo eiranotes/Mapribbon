@@ -418,6 +418,40 @@ struct PlaceEditorView: View {
     }
 }
 
+
+private struct BoardRouteSegment: Identifiable {
+    let id: Int
+    let start: CGPoint
+    let end: CGPoint
+}
+
+private struct TexturedRopeSegment: View {
+    let start: CGPoint
+    let end: CGPoint
+    let thickness: CGFloat
+
+    var body: some View {
+        let deltaX = end.x - start.x
+        let deltaY = end.y - start.y
+        let length = max(sqrt(deltaX * deltaX + deltaY * deltaY), thickness)
+        let angle = Angle(radians: Double(atan2(deltaY, deltaX)))
+
+        Image("RouteRopeRed")
+            .resizable(
+                capInsets: EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10),
+                resizingMode: .tile
+            )
+            .interpolation(.high)
+            .frame(width: length + thickness * 0.7, height: thickness)
+            .rotationEffect(angle)
+            .position(
+                x: (start.x + end.x) * 0.5,
+                y: (start.y + end.y) * 0.5
+            )
+            .shadow(color: .black.opacity(0.22), radius: thickness * 0.28, y: thickness * 0.18)
+    }
+}
+
 extension Binding where Value == String {
     init(_ source: Binding<String?>, replacingNilWith fallback: String) {
         self.init(
@@ -448,8 +482,9 @@ struct BoardCanvasView: View {
         ZStack {
             Image(uiImage: model.mapImage).resizable().scaledToFill()
             Color.white.opacity(0.10)
-            routeLayer(size)
+            ropeLayer(size)
             photoLayer(size, scale: 0.19)
+            pinLayer(size)
             header(size, dark: true)
             footer(size, dark: true)
         }
@@ -461,7 +496,8 @@ struct BoardCanvasView: View {
             VStack(spacing: 0) {
                 ZStack {
                     Image(uiImage: model.mapImage).resizable().scaledToFill()
-                    routeLayer(CGSize(width: size.width, height: size.height * 0.68))
+                    ropeLayer(CGSize(width: size.width, height: size.height * 0.68))
+                    pinLayer(CGSize(width: size.width, height: size.height * 0.68))
                 }
                 .frame(height: size.height * 0.68)
                 HStack(spacing: size.width * 0.018) {
@@ -486,9 +522,9 @@ struct BoardCanvasView: View {
             Image(uiImage: model.mapImage).resizable().scaledToFill()
                 .padding(size.width * 0.07)
                 .overlay { RoundedRectangle(cornerRadius: size.width * 0.01).stroke(Color.black.opacity(0.10), lineWidth: 1).padding(size.width * 0.07) }
-            routeLayer(size)
-                .padding(size.width * 0.07)
+            ropeLayer(size)
             photoLayer(size, scale: 0.17)
+            pinLayer(size)
             header(size, dark: false)
             footer(size, dark: false)
         }
@@ -498,8 +534,9 @@ struct BoardCanvasView: View {
         ZStack {
             Color(hex: 0xEDE4D5)
             Image(uiImage: model.mapImage).resizable().scaledToFill().opacity(0.78)
-            routeLayer(size)
+            ropeLayer(size)
             photoLayer(size, scale: 0.20)
+            pinLayer(size)
             ForEach(0..<3, id: \.self) { index in
                 Rectangle().fill(Color(hex: 0xD9C29D).opacity(0.75))
                     .frame(width: size.width * 0.18, height: size.height * 0.026)
@@ -511,28 +548,83 @@ struct BoardCanvasView: View {
         }
     }
 
-    @ViewBuilder private func routeLayer(_ size: CGSize) -> some View {
-        Canvas { context, canvas in
-            let places = model.visiblePlaces
-            guard let first = places.first, let firstPoint = model.normalizedPoints[first.id] else { return }
-            var path = Path()
-            path.move(to: CGPoint(x: firstPoint.x * canvas.width, y: firstPoint.y * canvas.height))
-            for place in places.dropFirst() {
-                guard let point = model.normalizedPoints[place.id] else { continue }
-                path.addLine(to: CGPoint(x: point.x * canvas.width, y: point.y * canvas.height))
-            }
-            context.stroke(path, with: .color(MRColor.accent), style: StrokeStyle(lineWidth: max(2, canvas.width * 0.007), lineCap: .round, lineJoin: .round, dash: [canvas.width * 0.02, canvas.width * 0.014]))
-        }
+    @ViewBuilder private func ropeLayer(_ size: CGSize) -> some View {
+        let points = routePoints(in: size)
+        let thickness = max(5, size.width * 0.018)
 
-        ForEach(Array(model.visiblePlaces.enumerated()), id: \.element.id) { index, place in
-            if let point = model.normalizedPoints[place.id] {
-                ZStack {
-                    Circle().fill(MRColor.accent)
-                    Text("\(index + 1)").font(.system(size: max(8, size.width * 0.025), weight: .bold)).foregroundStyle(.white)
-                }
-                .frame(width: size.width * 0.055, height: size.width * 0.055)
-                .position(x: point.x * size.width, y: point.y * size.height)
+        ZStack {
+            ForEach(routeSegments(from: points)) { segment in
+                TexturedRopeSegment(
+                    start: segment.start,
+                    end: segment.end,
+                    thickness: thickness
+                )
             }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    @ViewBuilder private func pinLayer(_ size: CGSize) -> some View {
+        let points = routePoints(in: size)
+        let pinWidth = max(28, size.width * 0.082)
+        let pinHeight = pinWidth * 1.60
+        let pinAssets = [
+            "RoutePinBlue",
+            "RoutePinTeal",
+            "RoutePinYellow",
+            "RoutePinCream",
+            "RoutePinRed",
+            "RoutePinGreen"
+        ]
+
+        ZStack {
+            ForEach(points.indices, id: \.self) { index in
+                Image(pinAssets[index % pinAssets.count])
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: pinWidth, height: pinHeight)
+                    .shadow(color: .black.opacity(0.25), radius: pinWidth * 0.10, y: pinWidth * 0.08)
+                    .position(
+                        x: points[index].x,
+                        y: points[index].y + pinHeight * 0.29
+                    )
+            }
+        }
+        .frame(width: size.width, height: size.height)
+    }
+
+    private func routePoints(in size: CGSize) -> [CGPoint] {
+        switch model.template {
+        case .ribbon:
+            return cardAnchorPoints(count: model.visiblePlaces.count, size: size, scale: 0.19)
+        case .scrapbook:
+            return cardAnchorPoints(count: model.visiblePlaces.count, size: size, scale: 0.20)
+        case .editorial, .postcard:
+            return model.visiblePlaces.compactMap { place in
+                guard let point = model.normalizedPoints[place.id] else { return nil }
+                return CGPoint(x: point.x * size.width, y: point.y * size.height)
+            }
+        }
+    }
+
+    private func cardAnchorPoints(count: Int, size: CGSize, scale: CGFloat) -> [CGPoint] {
+        let positions = cardPositions(count: count)
+        let cardHeight = size.height * scale * 0.86
+
+        return positions.map { position in
+            CGPoint(
+                x: position.x * size.width,
+                y: position.y * size.height - cardHeight * 0.40
+            )
+        }
+    }
+
+    private func routeSegments(from points: [CGPoint]) -> [BoardRouteSegment] {
+        guard points.count > 1 else { return [] }
+
+        return (0..<(points.count - 1)).map { index in
+            BoardRouteSegment(id: index, start: points[index], end: points[index + 1])
         }
     }
 
