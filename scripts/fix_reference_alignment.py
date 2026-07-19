@@ -23,9 +23,9 @@ def patch_coordinate_layers() -> None:
     text = SWIFT_PATH.read_text(encoding="utf-8")
 
     rope_layer = '''    @ViewBuilder private func ropeLayer(_ size: CGSize) -> some View {
-        Canvas { context, canvasSize in
-            let points = routePoints(in: canvasSize)
-            let thickness = max(5, canvasSize.width * 0.014)
+        Canvas { context, _ in
+            let points = routePoints(in: size)
+            let thickness = max(5, size.width * 0.014)
             let resolvedRope = context.resolve(Image("RouteRopeRed"))
             let tileWidth = thickness * 2.45
 
