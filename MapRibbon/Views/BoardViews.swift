@@ -552,18 +552,17 @@ struct BoardCanvasView: View {
         let points = routePoints(in: size)
         let thickness = max(7, size.width * 0.024)
 
-        ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: size.width, height: size.height)
-
-            ForEach(routeSegments(from: points)) { segment in
-                TexturedRopeSegment(
-                    start: segment.start,
-                    end: segment.end,
-                    thickness: thickness
-                )
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                ForEach(routeSegments(from: points)) { segment in
+                    TexturedRopeSegment(
+                        start: segment.start,
+                        end: segment.end,
+                        thickness: thickness
+                    )
+                }
             }
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
@@ -581,23 +580,26 @@ struct BoardCanvasView: View {
             "RoutePinGreen"
         ]
 
-        ZStack(alignment: .topLeading) {
-            Rectangle()
-                .fill(Color.clear)
-                .frame(width: size.width, height: size.height)
-
-            ForEach(points.indices, id: \.self) { index in
-                Image(pinAssets[index % pinAssets.count])
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(width: pinWidth, height: pinHeight)
-                    .shadow(color: .black.opacity(0.22), radius: pinWidth * 0.09, y: pinWidth * 0.07)
-                    .position(
-                        x: points[index].x,
-                        y: points[index].y - pinHeight * 0.36
-                    )
+        GeometryReader { _ in
+            ZStack(alignment: .topLeading) {
+                ForEach(points.indices, id: \.self) { index in
+                    Image(pinAssets[index % pinAssets.count])
+                        .resizable()
+                        .interpolation(.high)
+                        .scaledToFit()
+                        .frame(width: pinWidth, height: pinHeight)
+                        .shadow(
+                            color: .black.opacity(0.22),
+                            radius: pinWidth * 0.09,
+                            y: pinWidth * 0.07
+                        )
+                        .offset(
+                            x: points[index].x - pinWidth * 0.50,
+                            y: points[index].y - pinHeight * 0.86
+                        )
+                }
             }
+            .frame(width: size.width, height: size.height, alignment: .topLeading)
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
