@@ -593,12 +593,12 @@ struct BoardCanvasView: View {
 
     private func ribbon(in size: CGSize) -> some View {
         let boardRect = CGRect(
-            x: size.width * 0.035,
-            y: size.height * 0.025,
-            width: size.width * 0.93,
-            height: size.height * 0.95
+            x: size.width * 0.02,
+            y: size.height * 0.015,
+            width: size.width * 0.96,
+            height: size.height * 0.97
         )
-        let mapRect = boardRect.insetBy(dx: size.width * 0.035, dy: size.width * 0.035)
+        let mapRect = boardRect.insetBy(dx: size.width * 0.025, dy: size.width * 0.025)
 
         return ZStack {
             CorkBoardTexture()
@@ -610,9 +610,9 @@ struct BoardCanvasView: View {
                 .shadow(color: .black.opacity(0.18), radius: size.width * 0.018, y: size.width * 0.012)
 
             mapPaper(in: mapRect)
-            ropeLayer(in: mapRect, scale: 0.205)
-            photoLayer(in: mapRect, scale: 0.205, labeled: true)
-            pinLayer(in: mapRect, scale: 0.205)
+            ropeLayer(in: mapRect, scale: 0.245)
+            photoLayer(in: mapRect, scale: 0.245, labeled: true)
+            pinLayer(in: mapRect, scale: 0.245)
             titleNote(in: mapRect)
             footer(in: mapRect, dark: true)
         }
@@ -664,9 +664,9 @@ struct BoardCanvasView: View {
             Color(hex: 0xA97845)
             CorkBoardTexture()
             mapPaper(in: mapRect)
-            ropeLayer(in: mapRect, scale: 0.21)
-            photoLayer(in: mapRect, scale: 0.21, labeled: true)
-            pinLayer(in: mapRect, scale: 0.21)
+            ropeLayer(in: mapRect, scale: 0.245)
+            photoLayer(in: mapRect, scale: 0.245, labeled: true)
+            pinLayer(in: mapRect, scale: 0.245)
             titleNote(in: mapRect)
             ForEach(0..<3, id: \.self) { index in
                 Rectangle()
@@ -702,7 +702,7 @@ struct BoardCanvasView: View {
     private func ropeLayer(in rect: CGRect, scale: CGFloat) -> some View {
         Canvas { context, _ in
             let points = routePoints(in: rect, scale: scale)
-            let thickness = max(6, rect.width * 0.016)
+            let thickness = max(7, rect.width * 0.018)
             let rope = context.resolve(Image("RouteRopeRed"))
             let tileWidth = thickness * 4.0
 
@@ -854,7 +854,7 @@ struct BoardCanvasView: View {
 
     private func cardAnchorPoints(count: Int, rect: CGRect, scale: CGFloat) -> [CGPoint] {
         let positions = cardPositions(count: count)
-        let cardHeight = rect.height * scale * 0.98
+        let cardHeight = rect.width * scale * 1.34
         let topInset = cardHeight * 0.42
         return positions.enumerated().map { index, position in
             let center = CGPoint(x: rect.minX + position.x * rect.width, y: rect.minY + position.y * rect.height)
@@ -875,10 +875,10 @@ struct BoardCanvasView: View {
 
     private func cardPositions(count: Int) -> [CGPoint] {
         let all = [
-            CGPoint(x: 0.25, y: 0.30), CGPoint(x: 0.74, y: 0.36),
-            CGPoint(x: 0.24, y: 0.53), CGPoint(x: 0.28, y: 0.75),
-            CGPoint(x: 0.73, y: 0.72), CGPoint(x: 0.22, y: 0.86),
-            CGPoint(x: 0.52, y: 0.47), CGPoint(x: 0.51, y: 0.80)
+            CGPoint(x: 0.25, y: 0.31), CGPoint(x: 0.74, y: 0.40),
+            CGPoint(x: 0.24, y: 0.56), CGPoint(x: 0.30, y: 0.77),
+            CGPoint(x: 0.73, y: 0.73), CGPoint(x: 0.22, y: 0.88),
+            CGPoint(x: 0.52, y: 0.49), CGPoint(x: 0.52, y: 0.82)
         ]
         return Array(all.prefix(max(0, min(count, all.count))))
     }
@@ -893,7 +893,7 @@ private struct BoardPhotoCard: View {
 
     var body: some View {
         let width = size.width * scale
-        let height = size.height * scale * (labeled ? 1.02 : 0.86)
+        let height = width * (labeled ? 1.34 : 1.08)
         ZStack {
             Rectangle().fill(Color.white.opacity(0.92))
                 .frame(width: width, height: height)
@@ -906,7 +906,7 @@ private struct BoardPhotoCard: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: width * 0.88, height: labeled ? height * 0.64 : height * 0.78)
+                    .frame(width: width * 0.88, height: labeled ? height * 0.68 : height * 0.80)
                     .clipped()
                 if labeled {
                     VStack(alignment: .leading, spacing: max(1, width * 0.012)) {
