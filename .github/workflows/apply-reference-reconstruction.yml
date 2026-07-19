@@ -1,12 +1,12 @@
 name: Apply reference reconstruction
 
 on:
-  push:
+  pull_request:
     branches:
-      - agent/full-ui-overhaul
+      - main
 
 concurrency:
-  group: reference-reconstruction-${{ github.ref }}
+  group: reference-reconstruction-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   apply:
-    if: github.actor != 'github-actions[bot]'
+    if: github.head_ref == 'agent/full-ui-overhaul' && github.actor != 'github-actions[bot]'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
