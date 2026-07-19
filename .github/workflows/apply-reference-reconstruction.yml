@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
@@ -88,6 +88,27 @@ jobs:
           fi
           exit "$STATUS"
 
+      - name: Stage verified source artifact
+        if: steps.xcode.outputs.status == '0'
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/reference-reconstruction-source"
+          mkdir -p "$OUT/MapRibbon/App" "$OUT/MapRibbon/Views" "$OUT/MapRibbonTests" "$OUT/.github/workflows"
+          cp MapRibbon/App/MapRibbonApp.swift "$OUT/MapRibbon/App/"
+          cp MapRibbon/Views/BoardViews.swift "$OUT/MapRibbon/Views/"
+          cp MapRibbon/Views/AtlasSettingsViews.swift "$OUT/MapRibbon/Views/"
+          cp MapRibbonTests/PhotoClustererTests.swift "$OUT/MapRibbonTests/"
+          cp .github/workflows/ios-ci.yml "$OUT/.github/workflows/"
+
+      - name: Upload verified source
+        if: steps.xcode.outputs.status == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reference-reconstruction-source
+          path: ${{ runner.temp }}/reference-reconstruction-source
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -98,23 +119,6 @@ jobs:
             ${{ runner.temp }}/MapRibbon.xcresult
           retention-days: 7
           if-no-files-found: warn
-
-      - name: Commit verified implementation
-        if: steps.xcode.outputs.status == '0'
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MapRibbon MapRibbonTests .github/workflows/ios-ci.yml
-          git status --short
-          if git diff --cached --quiet; then
-            echo "No source changes to commit"
-            exit 0
-          fi
-          git commit -m "fix: reconstruct board editor from reference"
-          git fetch origin agent/full-ui-overhaul
-          git rebase origin/agent/full-ui-overhaul
-          git push origin HEAD:agent/full-ui-overhaul
 
       - name: Fail on Xcode error
         if: steps.xcode.outputs.status != '0'
