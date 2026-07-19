@@ -1,0 +1,51 @@
+name: iOS CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test MapRibbon
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select an available iPhone simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          payload = json.load(sys.stdin)
+          for runtime in sorted(payload.get("devices", {}), reverse=True):
+              candidates = [
+                  device for device in payload["devices"][runtime]
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone")
+              ]
+              if candidates:
+                  print(candidates[0]["udid"])
+                  break
+          ')"
+          test -n "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Run Xcode tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            CODE_SIGNING_ALLOWED=NO
