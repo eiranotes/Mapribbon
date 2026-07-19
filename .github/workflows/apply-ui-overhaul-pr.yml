@@ -1,0 +1,77 @@
+name: Verify and apply UI overhaul
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.head_ref == 'agent/full-ui-overhaul' && github.actor != 'github-actions[bot]'
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Checkout task branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/full-ui-overhaul
+          fetch-depth: 0
+
+      - name: Apply overhaul patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat scripts/ui_overhaul_parts/part* > "$RUNNER_TEMP/apply_ui_overhaul.py"
+          python3 -m py_compile "$RUNNER_TEMP/apply_ui_overhaul.py"
+          python3 "$RUNNER_TEMP/apply_ui_overhaul.py"
+          git diff --check
+
+      - name: Select simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          payload = json.load(sys.stdin)
+          preferred = ["iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"]
+          for runtime in sorted(payload.get("devices", {}), reverse=True):
+              phones = [d for d in payload["devices"][runtime] if d.get("isAvailable") and d.get("name", "").startswith("iPhone")]
+              if not phones:
+                  continue
+              for name in preferred:
+                  match = next((d for d in phones if d.get("name") == name), None)
+                  if match:
+                      print(match["udid"] + "|" + match["name"] + "|" + runtime)
+                      raise SystemExit
+              selected = next((d for d in phones if "Pro" in d.get("name", "")), phones[0])
+              print(selected["udid"] + "|" + selected["name"] + "|" + runtime)
+              raise SystemExit
+          ')"
+          IFS='|' read -r UDID DEVICE_NAME RUNTIME <<< "$DEVICE_INFO"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+
+      - name: Run Xcode tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Commit verified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MapRibbon .github/workflows/ios-ci.yml
+          git diff --cached --quiet && { echo "No source changes"; exit 1; }
+          git commit -m "feat: overhaul MapRibbon UI and board artwork"
+          git push origin HEAD:agent/full-ui-overhaul
