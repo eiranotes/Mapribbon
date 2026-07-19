@@ -4,12 +4,9 @@ on:
   pull_request:
     branches:
       - main
-  push:
-    branches:
-      - agent/full-ui-overhaul
 
 concurrency:
-  group: reference-reconstruction-${{ github.ref }}
+  group: reference-reconstruction-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
@@ -39,6 +36,7 @@ jobs:
           python3 scripts/apply_reference_reconstruction.py
           git diff --check
           git status --short
+          git diff --stat
 
       - name: Resolve simulator
         id: simulator
@@ -108,8 +106,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add MapRibbon MapRibbonTests .github/workflows/ios-ci.yml
-          git diff --cached --quiet && { echo "No source changes to commit"; exit 1; }
+          git status --short
+          if git diff --cached --quiet; then
+            echo "No source changes to commit"
+            exit 0
+          fi
           git commit -m "fix: reconstruct board editor from reference"
+          git fetch origin agent/full-ui-overhaul
+          git rebase origin/agent/full-ui-overhaul
           git push origin HEAD:agent/full-ui-overhaul
 
       - name: Fail on Xcode error
