@@ -438,17 +438,17 @@ private struct TexturedRopeSegment: View {
 
         Image("RouteRopeRed")
             .resizable(
-                capInsets: EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10),
+                capInsets: EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14),
                 resizingMode: .tile
             )
             .interpolation(.high)
-            .frame(width: length + thickness * 0.7, height: thickness)
+            .frame(width: length + thickness * 0.45, height: thickness)
             .rotationEffect(angle)
             .position(
                 x: (start.x + end.x) * 0.5,
                 y: (start.y + end.y) * 0.5
             )
-            .shadow(color: .black.opacity(0.22), radius: thickness * 0.28, y: thickness * 0.18)
+            .shadow(color: .black.opacity(0.18), radius: thickness * 0.34, y: thickness * 0.20)
     }
 }
 
@@ -550,9 +550,13 @@ struct BoardCanvasView: View {
 
     @ViewBuilder private func ropeLayer(_ size: CGSize) -> some View {
         let points = routePoints(in: size)
-        let thickness = max(5, size.width * 0.018)
+        let thickness = max(7, size.width * 0.024)
 
-        ZStack {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: size.width, height: size.height)
+
             ForEach(routeSegments(from: points)) { segment in
                 TexturedRopeSegment(
                     start: segment.start,
@@ -561,12 +565,12 @@ struct BoardCanvasView: View {
                 )
             }
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     @ViewBuilder private func pinLayer(_ size: CGSize) -> some View {
         let points = routePoints(in: size)
-        let pinWidth = max(28, size.width * 0.082)
+        let pinWidth = max(28, size.width * 0.078)
         let pinHeight = pinWidth * 1.60
         let pinAssets = [
             "RoutePinBlue",
@@ -577,21 +581,25 @@ struct BoardCanvasView: View {
             "RoutePinGreen"
         ]
 
-        ZStack {
+        ZStack(alignment: .topLeading) {
+            Rectangle()
+                .fill(Color.clear)
+                .frame(width: size.width, height: size.height)
+
             ForEach(points.indices, id: \.self) { index in
                 Image(pinAssets[index % pinAssets.count])
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
                     .frame(width: pinWidth, height: pinHeight)
-                    .shadow(color: .black.opacity(0.25), radius: pinWidth * 0.10, y: pinWidth * 0.08)
+                    .shadow(color: .black.opacity(0.22), radius: pinWidth * 0.09, y: pinWidth * 0.07)
                     .position(
                         x: points[index].x,
-                        y: points[index].y + pinHeight * 0.29
+                        y: points[index].y - pinHeight * 0.36
                     )
             }
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     private func routePoints(in size: CGSize) -> [CGPoint] {
@@ -611,13 +619,24 @@ struct BoardCanvasView: View {
     private func cardAnchorPoints(count: Int, size: CGSize, scale: CGFloat) -> [CGPoint] {
         let positions = cardPositions(count: count)
         let cardHeight = size.height * scale * 0.86
+        let topInset = cardHeight * 0.40
 
-        return positions.map { position in
-            CGPoint(
+        return positions.enumerated().map { index, position in
+            let center = CGPoint(
                 x: position.x * size.width,
-                y: position.y * size.height - cardHeight * 0.40
+                y: position.y * size.height
+            )
+            let angle = cardRotationDegrees(for: index) * Double.pi / 180
+            return CGPoint(
+                x: center.x + CGFloat(sin(angle)) * topInset,
+                y: center.y - CGFloat(cos(angle)) * topInset
             )
         }
+    }
+
+    private func cardRotationDegrees(for index: Int) -> Double {
+        let values: [Double] = [-4, 3, -2, 4, -3, 2, -2, 3]
+        return values[index % values.count]
     }
 
     private func routeSegments(from points: [CGPoint]) -> [BoardRouteSegment] {
@@ -640,7 +659,7 @@ struct BoardCanvasView: View {
                 .background(.white)
                 .frame(width: size.width * scale, height: size.height * scale * 0.86)
                 .shadow(color: .black.opacity(0.18), radius: size.width * 0.015, y: size.width * 0.01)
-                .rotationEffect(.degrees([ -5, 4, -2, 6, -4, 3, -3, 5 ][index % 8]))
+                .rotationEffect(.degrees(cardRotationDegrees(for: index)))
                 .position(x: positions[index].x * size.width, y: positions[index].y * size.height)
             }
         }
@@ -655,9 +674,9 @@ struct BoardCanvasView: View {
                 .lineLimit(2)
         }
         .foregroundStyle(dark ? Color.black.opacity(0.82) : MRColor.ink)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, size.width * 0.065)
         .padding(.top, size.height * 0.05)
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     private func footer(_ size: CGSize, dark: Bool) -> some View {
@@ -677,10 +696,10 @@ struct BoardCanvasView: View {
 
     private func cardPositions(count: Int) -> [CGPoint] {
         let all = [
-            CGPoint(x: 0.22, y: 0.29), CGPoint(x: 0.76, y: 0.26),
-            CGPoint(x: 0.69, y: 0.52), CGPoint(x: 0.28, y: 0.62),
-            CGPoint(x: 0.72, y: 0.76), CGPoint(x: 0.22, y: 0.82),
-            CGPoint(x: 0.49, y: 0.40), CGPoint(x: 0.50, y: 0.70)
+            CGPoint(x: 0.24, y: 0.30), CGPoint(x: 0.74, y: 0.34),
+            CGPoint(x: 0.25, y: 0.52), CGPoint(x: 0.29, y: 0.71),
+            CGPoint(x: 0.72, y: 0.73), CGPoint(x: 0.22, y: 0.84),
+            CGPoint(x: 0.50, y: 0.43), CGPoint(x: 0.50, y: 0.68)
         ]
         return Array(all.prefix(max(0, min(count, all.count))))
     }
