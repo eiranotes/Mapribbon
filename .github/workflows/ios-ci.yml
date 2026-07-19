@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   test:
-    name: Build and test MapRibbon
+    name: Build, test, and capture MapRibbon
     runs-on: macos-15
     timeout-minutes: 35
     steps:
@@ -24,20 +24,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          UDID="$(xcrun simctl list devices available -j | python3 -c '
+          DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           payload = json.load(sys.stdin)
+          preferred = ["iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"]
           for runtime in sorted(payload.get("devices", {}), reverse=True):
-              candidates = [
+              phones = [
                   device for device in payload["devices"][runtime]
                   if device.get("isAvailable") and device.get("name", "").startswith("iPhone")
               ]
-              if candidates:
-                  print(candidates[0]["udid"])
-                  break
+              if not phones:
+                  continue
+              for name in preferred:
+                  match = next((device for device in phones if device.get("name") == name), None)
+                  if match:
+                      print(match["udid"] + "|" + match["name"] + "|" + runtime)
+                      raise SystemExit
+              pro = next((device for device in phones if "Pro" in device.get("name", "")), None)
+              selected = pro or phones[0]
+              print(selected["udid"] + "|" + selected["name"] + "|" + runtime)
+              raise SystemExit
           ')"
+          IFS='|' read -r UDID DEVICE_NAME RUNTIME <<< "$DEVICE_INFO"
           test -n "$UDID"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "name=$DEVICE_NAME" >> "$GITHUB_OUTPUT"
+          echo "runtime=$RUNTIME" >> "$GITHUB_OUTPUT"
+          echo "Selected $DEVICE_NAME on $RUNTIME ($UDID)"
 
       - name: Run Xcode tests
         id: xcode
@@ -68,6 +81,55 @@ jobs:
             cat "$REPORT_FILE"
           fi
           exit 0
+
+      - name: Launch simulator and capture board screens
+        if: steps.xcode.outputs.status == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
+          test -d "$APP_PATH"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          SCREENSHOT_DIR="$RUNNER_TEMP/mapribbon-device-screenshots"
+          mkdir -p "$SCREENSHOT_DIR"
+
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light || true
+          xcrun simctl status_bar "$UDID" override \
+            --time 10:41 \
+            --batteryState charged \
+            --batteryLevel 100 \
+            --wifiBars 3 \
+            --cellularBars 4 || true
+          xcrun simctl install "$UDID" "$APP_PATH"
+
+          xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" --screenshot-board-editor
+          sleep 4
+          xcrun simctl io "$UDID" screenshot "$SCREENSHOT_DIR/mapribbon-board-editor-device.png"
+
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" --screenshot-board-canvas
+          sleep 4
+          xcrun simctl io "$UDID" screenshot "$SCREENSHOT_DIR/mapribbon-board-canvas-device.png"
+
+          {
+            echo "device=${{ steps.simulator.outputs.name }}"
+            echo "runtime=${{ steps.simulator.outputs.runtime }}"
+            echo "bundle_id=$BUNDLE_ID"
+            echo "commit=$GITHUB_SHA"
+          } > "$SCREENSHOT_DIR/metadata.txt"
+          ls -lh "$SCREENSHOT_DIR"
+
+      - name: Upload device screenshots
+        if: steps.xcode.outputs.status == '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-device-screenshots
+          path: ${{ runner.temp }}/mapribbon-device-screenshots
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Report Xcode failure on the pull request
         if: steps.xcode.outputs.status != '0' && github.event_name == 'pull_request'
