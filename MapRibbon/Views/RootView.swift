@@ -8,26 +8,35 @@ struct RootView: View {
             if hasCompletedOnboarding {
                 MainTabView()
             } else {
-                OnboardingView {
-                    hasCompletedOnboarding = true
-                }
+                OnboardingView { hasCompletedOnboarding = true }
             }
         }
         .background(MRColor.background.ignoresSafeArea())
     }
 }
 
+enum MRMainTab: Hashable {
+    case boards
+    case library
+    case atlas
+}
+
 struct MainTabView: View {
+    @State private var selection: MRMainTab = .boards
+
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             NavigationStack { BoardsHomeView() }
+                .tag(MRMainTab.boards)
                 .tabItem { Label("보드", systemImage: "rectangle.stack") }
 
-            NavigationStack { AtlasView() }
-                .tabItem { Label("아틀라스", systemImage: "map") }
+            NavigationStack { BoardLibraryView() }
+                .tag(MRMainTab.library)
+                .tabItem { Label("보관함", systemImage: "books.vertical") }
 
-            NavigationStack { SettingsView() }
-                .tabItem { Label("설정", systemImage: "gearshape") }
+            NavigationStack { AtlasView() }
+                .tag(MRMainTab.atlas)
+                .tabItem { Label("아틀라스", systemImage: "map") }
         }
     }
 }

@@ -14,18 +14,22 @@ extension Color {
 }
 
 enum MRColor {
-    static let background = Color(hex: 0xF7F7F5)
-    static let surface = Color.white
-    static let secondarySurface = Color(hex: 0xF0F0EC)
-    static let primaryText = Color(hex: 0x171815)
-    static let secondaryText = Color(hex: 0x6D6F68)
-    static let border = Color(hex: 0xDFE0DA)
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    static let elevatedSurface = Color(uiColor: .systemBackground)
+    static let secondarySurface = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let primaryText = Color(uiColor: .label)
+    static let secondaryText = Color(uiColor: .secondaryLabel)
+    static let tertiaryText = Color(uiColor: .tertiaryLabel)
+    static let border = Color(uiColor: .separator)
     static let accent = Color(hex: 0xE86652)
     static let accentSoft = Color(hex: 0xF7E3DE)
     static let success = Color(hex: 0x3C7A57)
     static let warning = Color(hex: 0xA46B23)
     static let paper = Color(hex: 0xF4EFE5)
+    static let paperBright = Color(hex: 0xFBF8F0)
     static let ink = Color(hex: 0x26241F)
+    static let cork = Color(hex: 0xA97845)
 }
 
 enum MRSpacing {
@@ -33,73 +37,103 @@ enum MRSpacing {
     static let section: CGFloat = 24
     static let card: CGFloat = 16
     static let compact: CGFloat = 8
+    static let tight: CGFloat = 4
 }
 
 struct MRCardModifier: ViewModifier {
     var padding: CGFloat = MRSpacing.card
+    var shadow: Bool = true
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(MRColor.surface)
+            .background(MRColor.elevatedSurface)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(MRColor.border.opacity(0.8), lineWidth: 1)
+                    .stroke(MRColor.border.opacity(0.55), lineWidth: 0.7)
             }
-            .shadow(color: Color.black.opacity(0.045), radius: 10, y: 4)
+            .shadow(color: shadow ? Color.black.opacity(0.055) : .clear, radius: 12, y: 5)
     }
 }
 
 extension View {
-    func mrCard(padding: CGFloat = MRSpacing.card) -> some View {
-        modifier(MRCardModifier(padding: padding))
+    func mrCard(padding: CGFloat = MRSpacing.card, shadow: Bool = true) -> some View {
+        modifier(MRCardModifier(padding: padding, shadow: shadow))
     }
 }
 
 struct MRPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(.white)
+            .font(.headline.weight(.semibold))
+            .foregroundStyle(.white.opacity(isEnabled ? 1 : 0.72))
             .frame(maxWidth: .infinity)
-            .frame(height: 52)
-            .background(MRColor.accent.opacity(configuration.isPressed ? 0.78 : 1))
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
-            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+            .frame(minHeight: 52)
+            .background(MRColor.accent.opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.34))
+            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            .scaleEffect(!reduceMotion && configuration.isPressed && isEnabled ? 0.985 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
 
 struct MRSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(MRColor.primaryText)
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(MRColor.primaryText.opacity(isEnabled ? 1 : 0.45))
             .frame(maxWidth: .infinity)
-            .frame(height: 48)
-            .background(MRColor.secondarySurface.opacity(configuration.isPressed ? 0.72 : 1))
+            .frame(minHeight: 48)
+            .background(MRColor.elevatedSurface.opacity(configuration.isPressed ? 0.72 : 1))
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(MRColor.border, lineWidth: 1)
+                    .stroke(MRColor.border.opacity(isEnabled ? 0.7 : 0.35), lineWidth: 0.8)
             }
+            .scaleEffect(!reduceMotion && configuration.isPressed && isEnabled ? 0.985 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+struct MRPressableStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(!reduceMotion && configuration.isPressed ? 0.98 : 1)
+            .opacity(configuration.isPressed ? 0.86 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.13), value: configuration.isPressed)
     }
 }
 
 struct MRSectionHeader: View {
     let title: String
     var subtitle: String? = nil
+    var trailing: String? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title)
-                .font(.system(size: 18, weight: .bold))
-                .foregroundStyle(MRColor.primaryText)
-            if let subtitle {
-                Text(subtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(MRColor.secondaryText)
+        HStack(alignment: .firstTextBaseline) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(MRColor.primaryText)
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(MRColor.secondaryText)
+                }
+            }
+            Spacer()
+            if let trailing {
+                Text(trailing)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(MRColor.accent)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -113,10 +147,10 @@ struct MRStatusBadge: View {
 
     var body: some View {
         Label(text, systemImage: symbol)
-            .font(.system(size: 12, weight: .semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 6)
             .background(tint.opacity(0.10))
             .clipShape(Capsule())
     }
@@ -131,8 +165,8 @@ struct MRPhotoPlaceholder: View {
                 endPoint: .bottomTrailing
             )
             Image(systemName: "photo")
-                .font(.system(size: 22, weight: .medium))
-                .foregroundStyle(.white.opacity(0.9))
+                .font(.title3.weight(.medium))
+                .foregroundStyle(.white.opacity(0.92))
         }
     }
 }
@@ -142,21 +176,20 @@ struct MRLoadingRing: View {
 
     var body: some View {
         ZStack {
-            Circle()
-                .stroke(MRColor.border, lineWidth: 8)
+            Circle().stroke(MRColor.border.opacity(0.42), lineWidth: 8)
             Circle()
                 .trim(from: 0, to: max(0.02, progress))
-                .stroke(
-                    MRColor.accent,
-                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                )
+                .stroke(MRColor.accent, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             Text("\(Int(progress * 100))%")
-                .font(.system(size: 26, weight: .bold, design: .rounded))
+                .font(.title2.weight(.bold).monospacedDigit())
                 .foregroundStyle(MRColor.primaryText)
         }
-        .frame(width: 116, height: 116)
-        .animation(.easeInOut(duration: 0.28), value: progress)
+        .frame(width: 112, height: 112)
+        .animation(.easeInOut(duration: 0.24), value: progress)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("보드 생성 진행률")
+        .accessibilityValue("\(Int(progress * 100))퍼센트")
     }
 }
 

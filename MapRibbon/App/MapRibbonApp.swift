@@ -14,7 +14,25 @@ struct MapRibbonApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if launchArguments.contains("--screenshot-board-editor") {
+                if launchArguments.contains("--screenshot-onboarding") {
+                    OnboardingView(onComplete: {})
+                } else if launchArguments.contains("--screenshot-home") {
+                    NavigationStack { BoardsHomeView() }
+                } else if launchArguments.contains("--screenshot-library") {
+                    NavigationStack { BoardLibraryView() }
+                } else if launchArguments.contains("--screenshot-atlas") {
+                    NavigationStack { AtlasView() }
+                } else if launchArguments.contains("--screenshot-settings") {
+                    NavigationStack { SettingsView() }
+                } else if launchArguments.contains("--screenshot-paywall") {
+                    PaywallView()
+                } else if launchArguments.contains("--screenshot-generation") {
+                    GenerationProgressView(step: .preparingMap, progress: 0.62)
+                } else if launchArguments.contains("--screenshot-export") {
+                    ScreenshotExportFixtureView()
+                } else if launchArguments.contains("--screenshot-places") {
+                    ScreenshotPlacesFixtureView()
+                } else if launchArguments.contains("--screenshot-board-editor") {
                     BoardEditorScreenshotFixtureView()
                 } else if launchArguments.contains("--screenshot-board-canvas") {
                     BoardCanvasScreenshotFixtureView()
@@ -25,7 +43,6 @@ struct MapRibbonApp: App {
             .environment(photoLibrary)
             .environment(store)
             .tint(MRColor.accent)
-            .preferredColorScheme(.light)
         }
         .modelContainer(for: SavedBoard.self)
     }
@@ -65,6 +82,24 @@ private struct BoardCanvasScreenshotFixtureView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
         }
+    }
+}
+
+@MainActor
+private struct ScreenshotExportFixtureView: View {
+    @State private var draft = BoardScreenshotFixture.makeDraft()
+
+    var body: some View {
+        ExportSheet(draft: draft) { _, _ in }
+    }
+}
+
+@MainActor
+private struct ScreenshotPlacesFixtureView: View {
+    @State private var draft = BoardScreenshotFixture.makeDraft()
+
+    var body: some View {
+        PlaceManagerView(draft: draft)
     }
 }
 
