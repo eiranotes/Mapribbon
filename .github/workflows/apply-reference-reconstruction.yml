@@ -1,20 +1,20 @@
 name: Apply reference reconstruction
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - agent/full-ui-overhaul
 
 concurrency:
-  group: reference-reconstruction-${{ github.event.pull_request.number }}
+  group: reference-reconstruction-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apply:
-    if: github.head_ref == 'agent/full-ui-overhaul' && github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]'
     runs-on: macos-15
     timeout-minutes: 45
     steps:
@@ -23,6 +23,7 @@ jobs:
         with:
           ref: agent/full-ui-overhaul
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Record Xcode environment
         run: |
@@ -34,6 +35,16 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/apply_reference_reconstruction.py
           python3 scripts/apply_reference_reconstruction.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('MapRibbon/Views/BoardViews.swift')
+          text = path.read_text(encoding='utf-8')
+          old = 'let cardHeight = rect.width * scale * 1.34'
+          new = 'let cardHeight = rect.width * scale * 1.23'
+          if text.count(old) != 1:
+              raise SystemExit(f'card anchor match count={text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
           git diff --check
           git status --short
           git diff --stat
@@ -88,27 +99,6 @@ jobs:
           fi
           exit "$STATUS"
 
-      - name: Stage verified source artifact
-        if: steps.xcode.outputs.status == '0'
-        run: |
-          set -euo pipefail
-          OUT="$RUNNER_TEMP/reference-reconstruction-source"
-          mkdir -p "$OUT/MapRibbon/App" "$OUT/MapRibbon/Views" "$OUT/MapRibbonTests" "$OUT/.github/workflows"
-          cp MapRibbon/App/MapRibbonApp.swift "$OUT/MapRibbon/App/"
-          cp MapRibbon/Views/BoardViews.swift "$OUT/MapRibbon/Views/"
-          cp MapRibbon/Views/AtlasSettingsViews.swift "$OUT/MapRibbon/Views/"
-          cp MapRibbonTests/PhotoClustererTests.swift "$OUT/MapRibbonTests/"
-          cp .github/workflows/ios-ci.yml "$OUT/.github/workflows/"
-
-      - name: Upload verified source
-        if: steps.xcode.outputs.status == '0'
-        uses: actions/upload-artifact@v4
-        with:
-          name: reference-reconstruction-source
-          path: ${{ runner.temp }}/reference-reconstruction-source
-          retention-days: 7
-          if-no-files-found: error
-
       - name: Upload diagnostics
         if: always()
         uses: actions/upload-artifact@v4
@@ -119,6 +109,19 @@ jobs:
             ${{ runner.temp }}/MapRibbon.xcresult
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Commit verified implementation
+        if: steps.xcode.outputs.status == '0'
+        env:
+          GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MapRibbon MapRibbonTests .github/workflows/ios-ci.yml
+          git diff --cached --quiet && { echo "No source changes to commit"; exit 1; }
+          git commit -m "fix: reconstruct board editor from reference"
+          git push "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:agent/full-ui-overhaul
 
       - name: Fail on Xcode error
         if: steps.xcode.outputs.status != '0'
