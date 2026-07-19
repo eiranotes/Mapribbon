@@ -118,7 +118,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add MapRibbon MapRibbonTests .github/workflows/ios-ci.yml
+          git add MapRibbon MapRibbonTests
           git diff --cached --quiet && { echo "No source changes to commit"; exit 1; }
           git commit -m "fix: reconstruct board editor from reference"
           git push "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:agent/full-ui-overhaul
