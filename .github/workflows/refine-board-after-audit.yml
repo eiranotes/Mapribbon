@@ -43,13 +43,25 @@ jobs:
 
       - name: Xcode test
         run: |
-          set -euo pipefail
+          set +e
+          LOG="$RUNNER_TEMP/refine-xcode.log"
           xcodebuild test \
             -project MapRibbon.xcodeproj \
             -scheme MapRibbon \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath "$RUNNER_TEMP/DerivedData" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            >"$LOG" 2>&1
+          STATUS=$?
+          if [ "$STATUS" -ne 0 ]; then
+            echo "Compiler diagnostics:"
+            grep -nE "error:|BUILD FAILED|TEST FAILED|The following build commands failed" "$LOG" | tail -n 100 || true
+            echo "Final log:"
+            tail -n 120 "$LOG"
+          else
+            tail -n 60 "$LOG"
+          fi
+          exit "$STATUS"
 
       - name: Commit refined board
         run: |
