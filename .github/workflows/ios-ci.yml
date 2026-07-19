@@ -42,8 +42,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          xcodebuild test \
+          LOG_FILE="$RUNNER_TEMP/xcodebuild.log"
+          if xcodebuild test \
             -project MapRibbon.xcodeproj \
             -scheme MapRibbon \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            >"$LOG_FILE" 2>&1; then
+            tail -n 80 "$LOG_FILE"
+          else
+            echo "::group::Xcode errors"
+            grep -nE "error:|BUILD FAILED|TEST FAILED|Testing failed|The following build commands failed" "$LOG_FILE" | tail -n 160 || true
+            echo "::endgroup::"
+            echo "::group::Xcode log tail"
+            tail -n 220 "$LOG_FILE"
+            echo "::endgroup::"
+            exit 1
+          fi
