@@ -148,7 +148,7 @@ private struct AtlasPaperLines: View {
 struct SettingsView: View {
     @Environment(PhotoLibraryService.self) private var photoLibrary
     @Environment(StoreService.self) private var store
-    @AppStorage("defaultExportFormat") private var defaultFormat = ExportFormat.story.rawValue
+    @AppStorage("defaultExportFormat") private var defaultFormat = ExportFormat.poster.rawValue
     @State private var showingPaywall = false
 
     var body: some View {

@@ -76,7 +76,7 @@ private struct BoardCanvasScreenshotFixtureView: View {
             MRColor.background.ignoresSafeArea()
 
             BoardCanvasView(model: draft.renderModel, watermark: false)
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                .aspectRatio(3.0 / 4.0, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
                 .padding(.horizontal, 18)
