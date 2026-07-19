@@ -14,7 +14,25 @@ struct MapRibbonApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                if launchArguments.contains("--screenshot-board-editor") {
+                if launchArguments.contains("--screenshot-onboarding") {
+                    OnboardingView(onComplete: {})
+                } else if launchArguments.contains("--screenshot-home") {
+                    NavigationStack { BoardsHomeView() }
+                } else if launchArguments.contains("--screenshot-library") {
+                    NavigationStack { BoardLibraryView() }
+                } else if launchArguments.contains("--screenshot-atlas") {
+                    NavigationStack { AtlasView() }
+                } else if launchArguments.contains("--screenshot-settings") {
+                    NavigationStack { SettingsView() }
+                } else if launchArguments.contains("--screenshot-paywall") {
+                    PaywallView()
+                } else if launchArguments.contains("--screenshot-generation") {
+                    GenerationProgressView(step: .preparingMap, progress: 0.62)
+                } else if launchArguments.contains("--screenshot-export") {
+                    ScreenshotExportFixtureView()
+                } else if launchArguments.contains("--screenshot-places") {
+                    ScreenshotPlacesFixtureView()
+                } else if launchArguments.contains("--screenshot-board-editor") {
                     BoardEditorScreenshotFixtureView()
                 } else if launchArguments.contains("--screenshot-board-canvas") {
                     BoardCanvasScreenshotFixtureView()
@@ -25,7 +43,6 @@ struct MapRibbonApp: App {
             .environment(photoLibrary)
             .environment(store)
             .tint(MRColor.accent)
-            .preferredColorScheme(.light)
         }
         .modelContainer(for: SavedBoard.self)
     }
@@ -59,12 +76,30 @@ private struct BoardCanvasScreenshotFixtureView: View {
             MRColor.background.ignoresSafeArea()
 
             BoardCanvasView(model: draft.renderModel, watermark: false)
-                .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                .aspectRatio(3.0 / 4.0, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 12)
         }
+    }
+}
+
+@MainActor
+private struct ScreenshotExportFixtureView: View {
+    @State private var draft = BoardScreenshotFixture.makeDraft()
+
+    var body: some View {
+        ExportSheet(draft: draft) { _, _ in }
+    }
+}
+
+@MainActor
+private struct ScreenshotPlacesFixtureView: View {
+    @State private var draft = BoardScreenshotFixture.makeDraft()
+
+    var body: some View {
+        PlaceManagerView(draft: draft)
     }
 }
 
@@ -268,35 +303,74 @@ private enum BoardScreenshotFixture {
                 )
             }
 
-            UIColor.white.withAlphaComponent(0.13).setFill()
-            for index in 0..<7 {
-                let diameter = CGFloat(80 + index * 18)
-                let x = CGFloat((index * 113) % 650) - 20
-                let y = CGFloat((index * 79) % 450) - 30
-                context.fillEllipse(in: CGRect(x: x, y: y, width: diameter, height: diameter))
+            context.saveGState()
+            if symbol == "building.columns.fill" {
+                UIColor(red: 0.30, green: 0.55, blue: 0.24, alpha: 0.92).setFill()
+                context.fill(CGRect(x: 0, y: 365, width: size.width, height: 155))
+                drawSymbol(symbol, pointSize: 250, center: CGPoint(x: 350, y: 300), color: .white.withAlphaComponent(0.90))
+            } else if symbol == "storefront.fill" {
+                UIColor(red: 0.12, green: 0.09, blue: 0.07, alpha: 0.60).setFill()
+                context.fill(CGRect(x: 55, y: 105, width: 590, height: 350))
+                for index in 0..<8 {
+                    let bulb = UIColor(red: 1.0, green: 0.78, blue: 0.30, alpha: 0.92)
+                    bulb.setFill()
+                    context.fillEllipse(in: CGRect(x: 95 + index * 72, y: 130 + (index % 2) * 18, width: 18, height: 18))
+                }
+                drawSymbol(symbol, pointSize: 210, center: CGPoint(x: 350, y: 325), color: .white.withAlphaComponent(0.86))
+            } else if symbol == "cup.and.saucer.fill" {
+                UIColor(red: 0.38, green: 0.25, blue: 0.17, alpha: 0.88).setFill()
+                context.fill(CGRect(x: 0, y: 310, width: size.width, height: 210))
+                drawSymbol(symbol, pointSize: 220, center: CGPoint(x: 355, y: 302), color: UIColor(red: 0.96, green: 0.91, blue: 0.82, alpha: 0.94))
+            } else if symbol == "tree.fill" {
+                UIColor(red: 0.68, green: 0.57, blue: 0.40, alpha: 0.82).setFill()
+                context.fill(CGRect(x: 0, y: 385, width: size.width, height: 135))
+                for index in 0..<5 {
+                    drawSymbol(symbol, pointSize: CGFloat(145 + index * 8), center: CGPoint(x: CGFloat(95 + index * 130), y: CGFloat(300 + (index % 2) * 24)), color: UIColor(red: 0.16, green: 0.34, blue: 0.18, alpha: 0.88))
+                }
+            } else {
+                UIColor(red: 0.02, green: 0.05, blue: 0.12, alpha: 0.78).setFill()
+                context.fill(CGRect(x: 0, y: 330, width: size.width, height: 190))
+                for index in 0..<12 {
+                    let width = CGFloat(28 + (index % 3) * 10)
+                    let height = CGFloat(70 + (index % 5) * 24)
+                    UIColor.black.withAlphaComponent(0.55).setFill()
+                    context.fill(CGRect(x: CGFloat(15 + index * 58), y: 420 - height, width: width, height: height))
+                    UIColor(red: 1, green: 0.78, blue: 0.36, alpha: 0.86).setFill()
+                    context.fill(CGRect(x: CGFloat(22 + index * 58), y: 390 - height, width: 6, height: 6))
+                }
+                drawSymbol(symbol, pointSize: 150, center: CGPoint(x: 515, y: 170), color: .white.withAlphaComponent(0.90))
+            }
+            context.restoreGState()
+
+            UIColor.white.withAlphaComponent(0.06).setFill()
+            for index in 0..<120 {
+                let x = CGFloat((index * 83) % 700)
+                let y = CGFloat((index * 137) % 520)
+                context.fillEllipse(in: CGRect(x: x, y: y, width: 2, height: 2))
             }
 
-            let configuration = UIImage.SymbolConfiguration(pointSize: 190, weight: .semibold)
-            if let image = UIImage(systemName: symbol, withConfiguration: configuration)?
-                .withTintColor(.white.withAlphaComponent(0.88), renderingMode: .alwaysOriginal) {
-                let imageSize = image.size
-                let origin = CGPoint(
-                    x: (size.width - imageSize.width) * 0.5,
-                    y: (size.height - imageSize.height) * 0.44
-                )
-                image.draw(at: origin)
-            }
-
-            let paragraph = NSMutableParagraphStyle()
-            paragraph.alignment = .center
-            title.draw(
-                in: CGRect(x: 30, y: size.height - 86, width: size.width - 60, height: 60),
-                withAttributes: [
-                    .font: UIFont.systemFont(ofSize: 34, weight: .bold),
-                    .foregroundColor: UIColor.white.withAlphaComponent(0.92),
-                    .paragraphStyle: paragraph
-                ]
+            let vignette = CGGradient(
+                colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                colors: [UIColor.clear.cgColor, UIColor.black.withAlphaComponent(0.22).cgColor] as CFArray,
+                locations: [0.45, 1]
             )
+            if let vignette {
+                context.drawRadialGradient(
+                    vignette,
+                    startCenter: CGPoint(x: size.width / 2, y: size.height / 2),
+                    startRadius: 80,
+                    endCenter: CGPoint(x: size.width / 2, y: size.height / 2),
+                    endRadius: 470,
+                    options: []
+                )
+            }
         }
+    }
+
+    private static func drawSymbol(_ name: String, pointSize: CGFloat, center: CGPoint, color: UIColor) {
+        let configuration = UIImage.SymbolConfiguration(pointSize: pointSize, weight: .semibold)
+        guard let image = UIImage(systemName: name, withConfiguration: configuration)?
+            .withTintColor(color, renderingMode: .alwaysOriginal) else { return }
+        image.draw(at: CGPoint(x: center.x - image.size.width / 2, y: center.y - image.size.height / 2))
     }
 }

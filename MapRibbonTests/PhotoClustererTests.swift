@@ -21,6 +21,17 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertEqual(PhotoClusterer.cluster(assets).count, 2)
     }
 
+
+    func testReferenceRibbonUsesBranchedRouteGraph() {
+        let edges = BoardRouteLayout.edgePairs(for: 5).map { [$0.0, $0.1] }
+        XCTAssertEqual(edges, [[0, 1], [0, 2], [2, 3], [1, 4], [3, 4]])
+    }
+
+    func testReferenceRibbonExtendsSequentiallyAfterFivePlaces() {
+        let edges = BoardRouteLayout.edgePairs(for: 7).map { [$0.0, $0.1] }
+        XCTAssertEqual(edges.suffix(2), [[4, 5], [5, 6]])
+    }
+
     private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {
         PhotoAssetSnapshot(
             id: id,
