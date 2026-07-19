@@ -42,6 +42,8 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Xcode test
+        id: xcode
+        continue-on-error: true
         run: |
           set +e
           LOG="$RUNNER_TEMP/refine-xcode.log"
@@ -53,17 +55,25 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             >"$LOG" 2>&1
           STATUS=$?
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
           if [ "$STATUS" -ne 0 ]; then
-            echo "Compiler diagnostics:"
             grep -nE "error:|BUILD FAILED|TEST FAILED|The following build commands failed" "$LOG" | tail -n 100 || true
-            echo "Final log:"
-            tail -n 120 "$LOG"
           else
             tail -n 60 "$LOG"
           fi
           exit "$STATUS"
 
+      - name: Upload refinement diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-refinement-xcode-log
+          path: ${{ runner.temp }}/refine-xcode.log
+          retention-days: 7
+          if-no-files-found: warn
+
       - name: Commit refined board
+        if: steps.xcode.outputs.status == '0'
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -72,3 +82,7 @@ jobs:
           git diff --cached --quiet && { echo "No board changes"; exit 1; }
           git commit -m "fix: refine board composition after simulator audit"
           git push origin HEAD:agent/full-ui-overhaul
+
+      - name: Fail on Xcode error
+        if: steps.xcode.outputs.status != '0'
+        run: exit 1
