@@ -1,0 +1,165 @@
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(detail).font(.caption).foregroundStyle(MRColor.secondaryText)
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(MRColor.elevatedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+}
+
+private struct PermissionExplainerView: View {
+    let isRequesting: Bool
+    let onContinue: () -> Void
+    let onContinueWithoutAccess: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("사진의 날짜와 장소를 읽습니다")
+                .font(.title2.weight(.bold))
+
+            HStack(spacing: 10) {
+                ForEach(["photo", "calendar", "mappin.and.ellipse"], id: \.self) { symbol in
+                    Image(systemName: symbol)
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(MRColor.accent)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 68)
+                        .background(MRColor.accentSoft)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 13) {
+                Label("사진 원본을 업로드하지 않습니다", systemImage: "checkmark.circle.fill")
+                Label("현재 위치 권한을 요청하지 않습니다", systemImage: "checkmark.circle.fill")
+                Label("제한된 사진 접근도 사용할 수 있습니다", systemImage: "checkmark.circle.fill")
+            }
+            .font(.subheadline)
+            .foregroundStyle(MRColor.primaryText)
+            .symbolRenderingMode(.hierarchical)
+
+            Spacer(minLength: 0)
+
+            Button(action: onContinue) {
+                if isRequesting { ProgressView().tint(.white) } else { Text("사진 접근 계속") }
+            }
+            .buttonStyle(MRPrimaryButtonStyle())
+            .disabled(isRequesting)
+
+            Button("나중에 설정", action: onContinueWithoutAccess)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(MRColor.secondaryText)
+                .frame(maxWidth: .infinity)
+        }
+        .padding(24)
+        .background(MRColor.background)
+    }
+}
+
+private struct OnboardingBoardPreview: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let size = proxy.size
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(hex: 0xA97845))
+                DemoCorkTexture().clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(Color(hex: 0xF1EBDD))
+                    .overlay(DemoMapLines().opacity(0.65))
+                    .padding(size.width * 0.045)
+                    .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
+
+                DemoRope(start: CGPoint(x: 0.28, y: 0.37), end: CGPoint(x: 0.72, y: 0.55), size: size)
+                DemoRope(start: CGPoint(x: 0.72, y: 0.55), end: CGPoint(x: 0.34, y: 0.76), size: size)
+
+                DemoPolaroid(symbol: "building.columns.fill", title: "경복궁", tint: Color(hex: 0x6DA4C4))
+                    .frame(width: size.width * 0.29, height: size.height * 0.25)
+                    .rotationEffect(.degrees(-4))
+                    .position(x: size.width * 0.28, y: size.height * 0.39)
+                DemoPolaroid(symbol: "storefront.fill", title: "시장", tint: Color(hex: 0xD67C54))
+                    .frame(width: size.width * 0.28, height: size.height * 0.25)
+                    .rotationEffect(.degrees(4))
+                    .position(x: size.width * 0.72, y: size.height * 0.56)
+                DemoPolaroid(symbol: "tree.fill", title: "돌담길", tint: Color(hex: 0x6F9B70))
+                    .frame(width: size.width * 0.29, height: size.height * 0.25)
+                    .rotationEffect(.degrees(-3))
+                    .position(x: size.width * 0.34, y: size.height * 0.77)
+
+                DemoPin(asset: "RoutePinBlue", position: CGPoint(x: 0.28, y: 0.29), size: size)
+                DemoPin(asset: "RoutePinTeal", position: CGPoint(x: 0.72, y: 0.46), size: size)
+                DemoPin(asset: "RoutePinCream", position: CGPoint(x: 0.34, y: 0.67), size: size)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("2026년 7월 18일")
+                        .font(.system(size: size.width * 0.034, weight: .medium))
+                    Text("서울 하루 산책")
+                        .font(.system(size: size.width * 0.066, weight: .bold))
+                }
+                .foregroundStyle(MRColor.ink)
+                .padding(size.width * 0.045)
+                .background(Color(hex: 0xFBF8F0))
+                .rotationEffect(.degrees(-1))
+                .shadow(color: .black.opacity(0.14), radius: 5, y: 3)
+                .position(x: size.width * 0.36, y: size.height * 0.14)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct DemoRope: View {
+    let start: CGPoint
+    let end: CGPoint
+    let size: CGSize
+
+    var body: some View {
+        let p1 = CGPoint(x: start.x * size.width, y: start.y * size.height)
+        let p2 = CGPoint(x: end.x * size.width, y: end.y * size.height)
+        let dx = p2.x - p1.x
+        let dy = p2.y - p1.y
+        let length = sqrt(dx * dx + dy * dy)
+        Image("RouteRopeRed")
+            .resizable(capInsets: EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14), resizingMode: .tile)
+            .frame(width: length, height: max(5, size.width * 0.018))
+            .rotationEffect(.radians(Double(atan2(dy, dx))))
+            .position(x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2)
+            .shadow(color: .black.opacity(0.22), radius: 2, y: 1)
+    }
+}
+
+private struct DemoPin: View {
+    let asset: String
+    let position: CGPoint
+    let size: CGSize
+
+    var body: some View {
+        Image(asset)
+            .resizable()
+            .scaledToFit()
+            .frame(width: size.width * 0.065, height: size.width * 0.10)
+            .position(x: position.x * size.width, y: position.y * size.height)
+    }
+}
+
+private struct DemoPolaroid: View {
+    let symbol: String
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ZStack {
+                tint
+                Image(systemName: symbol)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.9))
+            }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 9, weight: .bold))
+                Text("사진 3장").font(.system(size: 7)).foregroundStyle(.secondary)
+            }
