@@ -1,0 +1,175 @@
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(MRColor.accent)
+                                            .background(Circle().fill(.white))
+                                            .padding(6)
+                                    }
+                                }
+                        }
+                        .buttonStyle(MRPressableStyle())
+                    }
+                }
+            }
+        }
+        .navigationTitle(place.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct BoardRouteSegment''',
+    "place editor",
+)
+
+replace_block(
+    "MapRibbon/Views/BoardViews.swift",
+    r"private struct BoardRouteSegment: Identifiable \{.*?\n\}\n\nstruct SavedBoardDetailView",
+    r'''
+private struct BoardRouteSegment: Identifiable {
+    let id: Int
+    let start: CGPoint
+    let end: CGPoint
+}
+
+extension Binding where Value == String {
+    init(_ source: Binding<String?>, replacingNilWith fallback: String) {
+        self.init(
+            get: { source.wrappedValue ?? fallback },
+            set: { source.wrappedValue = $0.isEmpty ? nil : $0 }
+        )
+    }
+}
+
+struct BoardCanvasView: View {
+    let model: BoardRenderModel
+    let watermark: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            switch model.template {
+            case .ribbon: ribbon(in: proxy.size)
+            case .editorial: editorial(in: proxy.size)
+            case .postcard: postcard(in: proxy.size)
+            case .scrapbook: scrapbook(in: proxy.size)
+            }
+        }
+        .background(MRColor.paper)
+        .clipped()
+    }
+
+    private func ribbon(in size: CGSize) -> some View {
+        let boardRect = CGRect(
+            x: size.width * 0.035,
+            y: size.height * 0.025,
+            width: size.width * 0.93,
+            height: size.height * 0.95
+        )
+        let mapRect = boardRect.insetBy(dx: size.width * 0.035, dy: size.width * 0.035)
+
+        return ZStack {
+            CorkBoardTexture()
+            RoundedRectangle(cornerRadius: size.width * 0.018, style: .continuous)
+                .fill(Color(hex: 0xA97845))
+                .frame(width: boardRect.width, height: boardRect.height)
+                .position(x: boardRect.midX, y: boardRect.midY)
+                .overlay(CorkBoardTexture().clipShape(RoundedRectangle(cornerRadius: size.width * 0.018)).frame(width: boardRect.width, height: boardRect.height))
+                .shadow(color: .black.opacity(0.18), radius: size.width * 0.018, y: size.width * 0.012)
+
+            mapPaper(in: mapRect)
+            ropeLayer(in: mapRect, scale: 0.205)
+            photoLayer(in: mapRect, scale: 0.205, labeled: true)
+            pinLayer(in: mapRect, scale: 0.205)
+            titleNote(in: mapRect)
+            footer(in: mapRect, dark: true)
+        }
+    }
+
+    private func editorial(in size: CGSize) -> some View {
+        let mapRect = CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.70)
+        return ZStack(alignment: .top) {
+            MRColor.paper
+            VStack(spacing: 0) {
+                ZStack {
+                    mapPaper(in: mapRect)
+                    ropeLayer(in: mapRect, scale: 0.17)
+                    pinLayer(in: mapRect, scale: 0.17)
+                }
+                .frame(height: mapRect.height)
+                HStack(spacing: size.width * 0.014) {
+                    ForEach(Array(model.visiblePlaces.prefix(4))) { place in
+                        if let image = model.photoImages[place.representativeAssetIdentifier] {
+                            Image(uiImage: image).resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
+                        }
+                    }
+                }
+                .frame(height: size.height * 0.22)
+                .padding(size.width * 0.04)
+            }
+            genericHeader(size, dark: false)
+            genericFooter(size, dark: false)
+        }
+    }
+
+    private func postcard(in size: CGSize) -> some View {
+        let mapRect = CGRect(x: size.width * 0.07, y: size.width * 0.07, width: size.width * 0.86, height: size.height - size.width * 0.14)
+        return ZStack {
+            MRColor.paperBright
+            mapPaper(in: mapRect)
+            ropeLayer(in: mapRect, scale: 0.18)
+            photoLayer(in: mapRect, scale: 0.18, labeled: false)
+            pinLayer(in: mapRect, scale: 0.18)
+            genericHeader(size, dark: false)
+            genericFooter(size, dark: false)
+        }
+    }
+
+    private func scrapbook(in size: CGSize) -> some View {
+        let boardRect = CGRect(x: size.width * 0.025, y: size.height * 0.018, width: size.width * 0.95, height: size.height * 0.965)
+        let mapRect = boardRect.insetBy(dx: size.width * 0.04, dy: size.width * 0.04)
+        return ZStack {
+            Color(hex: 0xA97845)
+            CorkBoardTexture()
+            mapPaper(in: mapRect)
+            ropeLayer(in: mapRect, scale: 0.21)
+            photoLayer(in: mapRect, scale: 0.21, labeled: true)
+            pinLayer(in: mapRect, scale: 0.21)
+            titleNote(in: mapRect)
+            ForEach(0..<3, id: \.self) { index in
+                Rectangle()
+                    .fill(Color(hex: 0xD9C29D).opacity(0.78))
+                    .frame(width: size.width * 0.17, height: size.height * 0.022)
+                    .rotationEffect(.degrees(index == 1 ? -12 : 9))
+                    .position(x: size.width * [0.20, 0.80, 0.57][index], y: size.height * [0.20, 0.46, 0.84][index])
+            }
+            footer(in: mapRect, dark: true)
+        }
+    }
+
+    private func mapPaper(in rect: CGRect) -> some View {
+        ZStack {
+            Image(uiImage: model.mapImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: rect.width, height: rect.height)
+                .clipped()
+            Color(hex: 0xF4EFE5).opacity(0.30)
+            PaperGrain()
+        }
+        .frame(width: rect.width, height: rect.height)
+        .clipShape(RoundedRectangle(cornerRadius: rect.width * 0.012, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: rect.width * 0.012)
+                .stroke(Color.black.opacity(0.10), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.16), radius: rect.width * 0.012, y: rect.width * 0.008)
+        .position(x: rect.midX, y: rect.midY)
+    }
+
+    private func ropeLayer(in rect: CGRect, scale: CGFloat) -> some View {
+        Canvas { context, _ in
+            let points = routePoints(in: rect, scale: scale)
+            let thickness = max(6, rect.width * 0.016)
+            let rope = context.resolve(Image("RouteRopeRed"))
+            let tileWidth = thickness * 4.0
+
+            for segment in routeSegments(from: points) {
+                let dx = segment.end.x - segment.start.x
