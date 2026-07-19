@@ -1,0 +1,108 @@
+name: Reference board refinement on PR v3
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  refine-and-capture:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Prepare image environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/refine-venv"
+          "$RUNNER_TEMP/refine-venv/bin/python" -m pip install --upgrade pip
+          "$RUNNER_TEMP/refine-venv/bin/python" -m pip install pillow
+          echo "$RUNNER_TEMP/refine-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Apply centered pins and clean rope
+        run: python3 scripts/refine_board_reference.py
+
+      - name: Select simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          payload = json.load(sys.stdin)
+          preferred = ["iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"]
+          for runtime in sorted(payload.get("devices", {}), reverse=True):
+              phones = [d for d in payload["devices"][runtime] if d.get("isAvailable") and d.get("name", "").startswith("iPhone")]
+              if not phones:
+                  continue
+              selected = next((d for name in preferred for d in phones if d.get("name") == name), None)
+              selected = selected or next((d for d in phones if "Pro" in d.get("name", "")), phones[0])
+              print(selected["udid"] + "|" + selected["name"] + "|" + runtime)
+              raise SystemExit
+          ')"
+          IFS='|' read -r UDID DEVICE_NAME RUNTIME <<< "$DEVICE_INFO"
+          test -n "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "name=$DEVICE_NAME" >> "$GITHUB_OUTPUT"
+          echo "runtime=$RUNTIME" >> "$GITHUB_OUTPUT"
+
+      - name: Xcode build and tests
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Capture installed app screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
+          test -d "$APP_PATH"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          OUT="$RUNNER_TEMP/reference-board-screenshots"
+          mkdir -p "$OUT"
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light || true
+          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" --screenshot-board-editor
+          sleep 4
+          xcrun simctl io "$UDID" screenshot "$OUT/mapribbon-board-editor-reference.png"
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" --screenshot-board-canvas
+          sleep 4
+          xcrun simctl io "$UDID" screenshot "$OUT/mapribbon-board-canvas-reference.png"
+          printf 'device=%s\nruntime=%s\nsource_commit=%s\n' "${{ steps.simulator.outputs.name }}" "${{ steps.simulator.outputs.runtime }}" "$GITHUB_SHA" > "$OUT/metadata.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-reference-board-screenshots-v3
+          path: ${{ runner.temp }}/reference-board-screenshots
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Commit verified code and assets
+        shell: bash
+        env:
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add MapRibbon/Views/BoardViews.swift MapRibbon/Resources/Assets.xcassets
+          git commit -m "feat: match rope and centered pins to board reference"
+          git push origin HEAD:"$HEAD_BRANCH"
