@@ -1,0 +1,378 @@
+name: Reference board refinement
+
+on:
+  push:
+    branches:
+      - agent/reference-board-refinement
+
+permissions:
+  contents: write
+
+jobs:
+  refine-and-capture:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - name: Checkout refinement branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install image tooling
+        run: python3 -m pip install --user pillow
+
+      - name: Align pins and rebuild rope material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import numpy as np
+
+          source = Path('MapRibbon/Views/BoardViews.swift')
+          text = source.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected one match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              'capInsets: EdgeInsets(top: 2, leading: 10, bottom: 2, trailing: 10),',
+              'capInsets: EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14),',
+              'rope cap insets'
+          )
+          replace_once(
+              '.frame(width: length + thickness * 0.7, height: thickness)',
+              '.frame(width: length + thickness * 0.45, height: thickness)',
+              'rope frame'
+          )
+          replace_once(
+              '.shadow(color: .black.opacity(0.22), radius: thickness * 0.28, y: thickness * 0.18)',
+              '.shadow(color: .black.opacity(0.18), radius: thickness * 0.34, y: thickness * 0.20)',
+              'rope shadow'
+          )
+
+          old_rope = '''    @ViewBuilder private func ropeLayer(_ size: CGSize) -> some View {
+              let points = routePoints(in: size)
+              let thickness = max(5, size.width * 0.018)
+
+              ZStack {
+                  ForEach(routeSegments(from: points)) { segment in
+                      TexturedRopeSegment(
+                          start: segment.start,
+                          end: segment.end,
+                          thickness: thickness
+                      )
+                  }
+              }
+              .frame(width: size.width, height: size.height)
+          }
+          '''
+          new_rope = '''    @ViewBuilder private func ropeLayer(_ size: CGSize) -> some View {
+              let points = routePoints(in: size)
+              let thickness = max(7, size.width * 0.024)
+
+              ZStack(alignment: .topLeading) {
+                  Rectangle()
+                      .fill(Color.clear)
+                      .frame(width: size.width, height: size.height)
+
+                  ForEach(routeSegments(from: points)) { segment in
+                      TexturedRopeSegment(
+                          start: segment.start,
+                          end: segment.end,
+                          thickness: thickness
+                      )
+                  }
+              }
+              .frame(width: size.width, height: size.height, alignment: .topLeading)
+          }
+          '''
+          replace_once(old_rope, new_rope, 'rope coordinate layer')
+
+          old_pin = '''    @ViewBuilder private func pinLayer(_ size: CGSize) -> some View {
+              let points = routePoints(in: size)
+              let pinWidth = max(28, size.width * 0.082)
+              let pinHeight = pinWidth * 1.60
+              let pinAssets = [
+                  "RoutePinBlue",
+                  "RoutePinTeal",
+                  "RoutePinYellow",
+                  "RoutePinCream",
+                  "RoutePinRed",
+                  "RoutePinGreen"
+              ]
+
+              ZStack {
+                  ForEach(points.indices, id: \.self) { index in
+                      Image(pinAssets[index % pinAssets.count])
+                          .resizable()
+                          .interpolation(.high)
+                          .scaledToFit()
+                          .frame(width: pinWidth, height: pinHeight)
+                          .shadow(color: .black.opacity(0.25), radius: pinWidth * 0.10, y: pinWidth * 0.08)
+                          .position(
+                              x: points[index].x,
+                              y: points[index].y + pinHeight * 0.29
+                          )
+                  }
+              }
+              .frame(width: size.width, height: size.height)
+          }
+          '''
+          new_pin = '''    @ViewBuilder private func pinLayer(_ size: CGSize) -> some View {
+              let points = routePoints(in: size)
+              let pinWidth = max(28, size.width * 0.078)
+              let pinHeight = pinWidth * 1.60
+              let pinAssets = [
+                  "RoutePinBlue",
+                  "RoutePinTeal",
+                  "RoutePinYellow",
+                  "RoutePinCream",
+                  "RoutePinRed",
+                  "RoutePinGreen"
+              ]
+
+              ZStack(alignment: .topLeading) {
+                  Rectangle()
+                      .fill(Color.clear)
+                      .frame(width: size.width, height: size.height)
+
+                  ForEach(points.indices, id: \.self) { index in
+                      Image(pinAssets[index % pinAssets.count])
+                          .resizable()
+                          .interpolation(.high)
+                          .scaledToFit()
+                          .frame(width: pinWidth, height: pinHeight)
+                          .shadow(color: .black.opacity(0.22), radius: pinWidth * 0.09, y: pinWidth * 0.07)
+                          .position(
+                              x: points[index].x,
+                              y: points[index].y - pinHeight * 0.36
+                          )
+                  }
+              }
+              .frame(width: size.width, height: size.height, alignment: .topLeading)
+          }
+          '''
+          replace_once(old_pin, new_pin, 'pin coordinate layer')
+
+          old_anchor = '''    private func cardAnchorPoints(count: Int, size: CGSize, scale: CGFloat) -> [CGPoint] {
+              let positions = cardPositions(count: count)
+              let cardHeight = size.height * scale * 0.86
+
+              return positions.map { position in
+                  CGPoint(
+                      x: position.x * size.width,
+                      y: position.y * size.height - cardHeight * 0.40
+                  )
+              }
+          }
+          '''
+          new_anchor = '''    private func cardAnchorPoints(count: Int, size: CGSize, scale: CGFloat) -> [CGPoint] {
+              let positions = cardPositions(count: count)
+              let cardHeight = size.height * scale * 0.86
+              let topInset = cardHeight * 0.40
+
+              return positions.enumerated().map { index, position in
+                  let center = CGPoint(
+                      x: position.x * size.width,
+                      y: position.y * size.height
+                  )
+                  let angle = cardRotationDegrees(for: index) * Double.pi / 180
+                  return CGPoint(
+                      x: center.x + CGFloat(sin(angle)) * topInset,
+                      y: center.y - CGFloat(cos(angle)) * topInset
+                  )
+              }
+          }
+
+          private func cardRotationDegrees(for index: Int) -> Double {
+              let values: [Double] = [-4, 3, -2, 4, -3, 2, -2, 3]
+              return values[index % values.count]
+          }
+          '''
+          replace_once(old_anchor, new_anchor, 'rotated card anchors')
+
+          replace_once(
+              '.rotationEffect(.degrees([ -5, 4, -2, 6, -4, 3, -3, 5 ][index % 8]))',
+              '.rotationEffect(.degrees(cardRotationDegrees(for: index)))',
+              'card rotation source'
+          )
+
+          old_header = '''        .frame(maxWidth: .infinity, alignment: .leading)
+              .padding(.horizontal, size.width * 0.065)
+              .padding(.top, size.height * 0.05)
+          '''
+          new_header = '''        .padding(.horizontal, size.width * 0.065)
+              .padding(.top, size.height * 0.05)
+              .frame(width: size.width, height: size.height, alignment: .topLeading)
+          '''
+          replace_once(old_header, new_header, 'header top alignment')
+
+          old_positions = '''        let all = [
+                  CGPoint(x: 0.22, y: 0.29), CGPoint(x: 0.76, y: 0.26),
+                  CGPoint(x: 0.69, y: 0.52), CGPoint(x: 0.28, y: 0.62),
+                  CGPoint(x: 0.72, y: 0.76), CGPoint(x: 0.22, y: 0.82),
+                  CGPoint(x: 0.49, y: 0.40), CGPoint(x: 0.50, y: 0.70)
+              ]
+          '''
+          new_positions = '''        let all = [
+                  CGPoint(x: 0.24, y: 0.30), CGPoint(x: 0.74, y: 0.34),
+                  CGPoint(x: 0.25, y: 0.52), CGPoint(x: 0.29, y: 0.71),
+                  CGPoint(x: 0.72, y: 0.73), CGPoint(x: 0.22, y: 0.84),
+                  CGPoint(x: 0.50, y: 0.43), CGPoint(x: 0.50, y: 0.68)
+              ]
+          '''
+          replace_once(old_positions, new_positions, 'reference card positions')
+
+          source.write_text(text, encoding='utf-8')
+
+          asset_root = Path('MapRibbon/Resources/Assets.xcassets')
+
+          def clean_green(image: Image.Image, red_asset: bool = False) -> Image.Image:
+              image = image.convert('RGBA')
+              pixels = image.load()
+              for y in range(image.height):
+                  for x in range(image.width):
+                      r, g, b, a = pixels[x, y]
+                      if a == 0:
+                          continue
+                      green_score = g - max(r, b)
+                      if green_score > 12 and g > 45:
+                          fade = max(0.0, min(1.0, (green_score - 8) / 55.0))
+                          a = int(a * (1.0 - fade))
+                      if a < 8:
+                          pixels[x, y] = (0, 0, 0, 0)
+                          continue
+                      if g > max(r, b):
+                          g = int(max(r, b) * 0.82)
+                      if red_asset:
+                          g = min(g, int(r * 0.52 + 10))
+                          b = min(b, int(r * 0.34 + 8))
+                      pixels[x, y] = (r, g, b, a)
+              return image
+
+          rope_path = asset_root / 'RouteRopeRed.imageset' / 'RouteRopeRed.png'
+          rope = clean_green(Image.open(rope_path), red_asset=True)
+          alpha = rope.getchannel('A')
+          bbox = alpha.point(lambda v: 255 if v >= 18 else 0).getbbox()
+          if bbox:
+              _, y0, _, y1 = bbox
+              y0 = max(0, y0 - 1)
+              y1 = min(rope.height, y1 + 1)
+              rope = rope.crop((0, y0, rope.width, y1))
+          rp = rope.load()
+          for x in range(rope.width):
+              rp[x, 0] = (0, 0, 0, 0)
+              rp[x, rope.height - 1] = (0, 0, 0, 0)
+
+          # Extract one repeated braid period and make its outer columns agree.
+          x0, x1 = 27, min(74, rope.width)
+          if x1 - x0 < 30:
+              x0, x1 = 0, rope.width
+          rope = rope.crop((x0, 0, x1, rope.height))
+          rope = rope.resize((rope.width * 3, rope.height * 3), Image.Resampling.LANCZOS)
+          array = np.array(rope).astype(np.float32)
+          width = array.shape[1]
+          blend = min(16, max(4, width // 10))
+          for i in range(blend):
+              left = array[:, i].copy()
+              right = array[:, width - blend + i].copy()
+              average = (left + right) * 0.5
+              strength = 1.0 - (i / max(1, blend - 1)) * 0.75
+              array[:, i] = left * (1.0 - strength) + average * strength
+              array[:, width - blend + i] = right * (1.0 - strength) + average * strength
+          rope = Image.fromarray(np.clip(array, 0, 255).astype(np.uint8), 'RGBA')
+          rope.save(rope_path, optimize=True)
+
+          for pin_path in sorted(asset_root.glob('RoutePin*.imageset/RoutePin*.png')):
+              pin = clean_green(Image.open(pin_path))
+              pin = pin.resize((pin.width * 2, pin.height * 2), Image.Resampling.LANCZOS)
+              pin.save(pin_path, optimize=True)
+          PY
+
+      - name: Select simulator
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          payload = json.load(sys.stdin)
+          preferred = ["iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"]
+          for runtime in sorted(payload.get("devices", {}), reverse=True):
+              phones = [d for d in payload["devices"][runtime] if d.get("isAvailable") and d.get("name", "").startswith("iPhone")]
+              if not phones:
+                  continue
+              for name in preferred:
+                  match = next((d for d in phones if d.get("name") == name), None)
+                  if match:
+                      print(match["udid"] + "|" + match["name"] + "|" + runtime)
+                      raise SystemExit
+              selected = next((d for d in phones if "Pro" in d.get("name", "")), phones[0])
+              print(selected["udid"] + "|" + selected["name"] + "|" + runtime)
+              raise SystemExit
+          ')"
+          IFS='|' read -r UDID DEVICE_NAME RUNTIME <<< "$DEVICE_INFO"
+          test -n "$UDID"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "name=$DEVICE_NAME" >> "$GITHUB_OUTPUT"
+          echo "runtime=$RUNTIME" >> "$GITHUB_OUTPUT"
+
+      - name: Build and test patched app
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Capture actual simulator screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
+          test -d "$APP_PATH"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          OUT="$RUNNER_TEMP/reference-board-screenshots"
+          mkdir -p "$OUT"
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light || true
+          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" --screenshot-board-editor
+          sleep 4
+          xcrun simctl io "$UDID" screenshot "$OUT/mapribbon-board-editor-reference.png"
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" --screenshot-board-canvas
+          sleep 4
+          xcrun simctl io "$UDID" screenshot "$OUT/mapribbon-board-canvas-reference.png"
+          printf 'device=%s\nruntime=%s\nsource_commit=%s\n' "${{ steps.simulator.outputs.name }}" "${{ steps.simulator.outputs.runtime }}" "$GITHUB_SHA" > "$OUT/metadata.txt"
+
+      - name: Upload reference screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-reference-board-screenshots
+          path: ${{ runner.temp }}/reference-board-screenshots
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Commit verified refinement
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add MapRibbon/Views/BoardViews.swift MapRibbon/Resources/Assets.xcassets
+          git commit -m "feat: match rope and centered pins to board reference"
+          git push origin HEAD:"$GITHUB_REF_NAME"
