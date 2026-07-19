@@ -132,6 +132,7 @@ jobs:
           xcrun simctl ui "$UDID" appearance light || true
           xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
           xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
 
           capture() {
             local flag="$1"
