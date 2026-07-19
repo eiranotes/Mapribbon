@@ -24,6 +24,16 @@ jobs:
           set -euo pipefail
           python3 -m py_compile scripts/refine_board_after_audit.py
           python3 scripts/refine_board_after_audit.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("MapRibbon/App/MapRibbonApp.swift")
+          text = path.read_text(encoding="utf-8")
+          old = 'center: CGPoint(x: 95 + index * 130, y: 300 + CGFloat(index % 2) * 24)'
+          new = 'center: CGPoint(x: CGFloat(95 + index * 130), y: CGFloat(300 + (index % 2) * 24))'
+          if text.count(old) != 1:
+              raise RuntimeError(f"fixture CGFloat fix: expected one match, found {text.count(old)}")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
           git diff --check
 
       - name: Resolve simulator
