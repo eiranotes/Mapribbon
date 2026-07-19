@@ -23,22 +23,52 @@ def patch_coordinate_layers() -> None:
     text = SWIFT_PATH.read_text(encoding="utf-8")
 
     rope_layer = '''    @ViewBuilder private func ropeLayer(_ size: CGSize) -> some View {
-        let points = routePoints(in: size)
-        let thickness = max(7, size.width * 0.024)
+        Canvas { context, canvasSize in
+            let points = routePoints(in: canvasSize)
+            let thickness = max(5, canvasSize.width * 0.014)
+            let resolvedRope = context.resolve(Image("RouteRopeRed"))
+            let tileWidth = thickness * 2.45
 
-        GeometryReader { _ in
-            ZStack(alignment: .topLeading) {
-                ForEach(routeSegments(from: points)) { segment in
-                    TexturedRopeSegment(
-                        start: segment.start,
-                        end: segment.end,
-                        thickness: thickness
+            for segment in routeSegments(from: points) {
+                let deltaX = segment.end.x - segment.start.x
+                let deltaY = segment.end.y - segment.start.y
+                let length = max(sqrt(deltaX * deltaX + deltaY * deltaY), thickness)
+                let angle = Angle(radians: Double(atan2(deltaY, deltaX)))
+                let midpoint = CGPoint(
+                    x: (segment.start.x + segment.end.x) * 0.5,
+                    y: (segment.start.y + segment.end.y) * 0.5
+                )
+
+                context.drawLayer { layer in
+                    layer.translateBy(x: midpoint.x, y: midpoint.y)
+                    layer.rotate(by: angle)
+                    layer.addFilter(
+                        .shadow(
+                            color: .black.opacity(0.18),
+                            radius: thickness * 0.30,
+                            x: 0,
+                            y: thickness * 0.18
+                        )
                     )
+
+                    var tileOrigin = -length * 0.5
+                    while tileOrigin < length * 0.5 {
+                        let remaining = length * 0.5 - tileOrigin
+                        let width = min(tileWidth, remaining)
+                        layer.draw(
+                            resolvedRope,
+                            in: CGRect(
+                                x: tileOrigin,
+                                y: -thickness * 0.5,
+                                width: width,
+                                height: thickness
+                            )
+                        )
+                        tileOrigin += tileWidth * 0.90
+                    }
                 }
             }
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
         }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     @ViewBuilder private func pinLayer'''
@@ -62,28 +92,22 @@ def patch_coordinate_layers() -> None:
             "RoutePinGreen"
         ]
 
-        GeometryReader { _ in
-            ZStack(alignment: .topLeading) {
-                ForEach(points.indices, id: \.self) { index in
-                    Image(pinAssets[index % pinAssets.count])
-                        .resizable()
-                        .interpolation(.high)
-                        .scaledToFit()
-                        .frame(width: pinWidth, height: pinHeight)
-                        .shadow(
-                            color: .black.opacity(0.22),
-                            radius: pinWidth * 0.09,
-                            y: pinWidth * 0.07
-                        )
-                        .offset(
-                            x: points[index].x - pinWidth * 0.50,
-                            y: points[index].y - pinHeight * 0.86
-                        )
-                }
-            }
-            .frame(width: size.width, height: size.height, alignment: .topLeading)
+        ForEach(points.indices, id: \.self) { index in
+            Image(pinAssets[index % pinAssets.count])
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: pinWidth, height: pinHeight)
+                .shadow(
+                    color: .black.opacity(0.22),
+                    radius: pinWidth * 0.09,
+                    y: pinWidth * 0.07
+                )
+                .position(
+                    x: points[index].x,
+                    y: points[index].y - pinHeight * 0.36
+                )
         }
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
     }
 
     private func routePoints'''
@@ -155,7 +179,6 @@ def clean_rope_asset() -> None:
 
     output = output.crop(bounding_box)
 
-    # Prevent interpolation from sampling opaque pixels at the outermost edge.
     pixels = output.load()
     for x in range(output.width):
         pixels[x, 0] = (0, 0, 0, 0)
