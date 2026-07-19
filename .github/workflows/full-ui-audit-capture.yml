@@ -21,17 +21,11 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('MapRibbon/App/MapRibbonApp.swift')
           text = path.read_text(encoding='utf-8')
-          old = '''                if launchArguments.contains("--screenshot-board-editor") {
-                      BoardEditorScreenshotFixtureView()
-                  } else if launchArguments.contains("--screenshot-board-canvas") {
-                      BoardCanvasScreenshotFixtureView()
-                  } else {
-                      RootView()
-                  }'''
-          new = '''                if launchArguments.contains("--audit-onboarding") {
+          replacement = '''if launchArguments.contains("--audit-onboarding") {
                       OnboardingView(onComplete: {})
                   } else if launchArguments.contains("--audit-home") {
                       NavigationStack { BoardsHomeView() }
@@ -54,9 +48,10 @@ jobs:
                   } else {
                       RootView()
                   }'''
-          if old not in text:
-              raise SystemExit('launch route block not found')
-          text = text.replace(old, new, 1)
+          pattern = r'if launchArguments\.contains\("--screenshot-board-editor"\) \{.*?\n\s*\} else \{\n\s*RootView\(\)\n\s*\}'
+          text, count = re.subn(pattern, replacement, text, count=1, flags=re.DOTALL)
+          if count != 1:
+              raise SystemExit(f'launch route block match count={count}')
 
           marker = '@MainActor\nprivate enum BoardScreenshotFixture {'
           fixtures = '''@MainActor
