@@ -1,0 +1,176 @@
+                    .frame(height: 250)
+                    .padding(.horizontal, 18)
+
+                VStack(spacing: 8) {
+                    Text("MapRibbon 전체 기능")
+                        .font(.title.weight(.bold))
+                    Text("한 번 구매하면 템플릿과 고해상도 저장을 계속 사용할 수 있습니다.")
+                        .font(.subheadline)
+                        .foregroundStyle(MRColor.secondaryText)
+                        .multilineTextAlignment(.center)
+                }
+
+                VStack(alignment: .leading, spacing: 14) {
+                    PaywallRow(symbol: "square.stack.3d.up", text: "4개 보드 템플릿")
+                    PaywallRow(symbol: "photo.badge.checkmark", text: "고해상도 저장과 워터마크 제거")
+                    PaywallRow(symbol: "clock.arrow.circlepath", text: "과거 날짜와 보드 무제한")
+                    PaywallRow(symbol: "map", text: "Memory Atlas 전체 기능")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
+                .background(MRColor.elevatedSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                Button {
+                    Task {
+                        await store.purchaseLifetime()
+                        if store.isUnlocked { dismiss() }
+                    }
+                } label: {
+                    if store.isLoading {
+                        ProgressView().tint(.white)
+                    } else if let price = store.lifetimeProduct?.displayPrice {
+                        Text("영구 잠금 해제 · \(price)")
+                    } else {
+                        Text("영구 잠금 해제")
+                    }
+                }
+                .buttonStyle(MRPrimaryButtonStyle())
+
+                Button("구매 복원") { Task { await store.restore() } }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MRColor.secondaryText)
+                    .padding(.bottom, 14)
+            }
+            .padding(20)
+        }
+        .background(MRColor.background)
+    }
+}
+
+private struct PremiumBoardSample: View {
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(Color(hex: 0xA97845))
+                RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0xF1EBDD)).padding(12)
+                Image("RouteRopeRed")
+                    .resizable(capInsets: EdgeInsets(top: 0, leading: 14, bottom: 0, trailing: 14), resizingMode: .tile)
+                    .frame(width: proxy.size.width * 0.58, height: 7)
+                    .rotationEffect(.degrees(22))
+                    .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
+                ForEach(Array(["building.columns.fill", "storefront.fill", "tree.fill"].enumerated()), id: \.offset) { index, symbol in
+                    VStack(spacing: 0) {
+                        ZStack {
+                            [Color(hex: 0x6DA4C4), Color(hex: 0xD67C54), Color(hex: 0x6F9B70)][index]
+                            Image(systemName: symbol).foregroundStyle(.white).font(.title3.weight(.semibold))
+                        }
+                        Rectangle().fill(.white).frame(height: 18)
+                    }
+                    .padding(4)
+                    .background(.white)
+                    .frame(width: 90, height: 90)
+                    .rotationEffect(.degrees([-5.0, 4.0, -2.0][index]))
+                    .position(x: proxy.size.width * [0.28, 0.72, 0.44][index], y: proxy.size.height * [0.34, 0.53, 0.77][index])
+                    .shadow(color: .black.opacity(0.15), radius: 4, y: 3)
+                }
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+private struct PaywallRow: View {
+    let symbol: String
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text).font(.subheadline.weight(.medium))
+        } icon: {
+            Image(systemName: symbol)
+                .foregroundStyle(MRColor.accent)
+                .frame(width: 28)
+        }
+    }
+}
+''',
+)
+
+replace_block(
+    "MapRibbon/Views/BoardViews.swift",
+    r"struct GenerationFlowView: View \{.*?\n\}\n\nstruct BoardEditorView: View",
+    r'''
+struct GenerationFlowView: View {
+    let summary: PhotoDaySummary
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var draft: BoardDraft?
+    @State private var step: GenerationStep = .readingPhotos
+    @State private var progress = 0.04
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if let draft {
+                    BoardEditorView(draft: draft, onClose: { dismiss() })
+                } else if let errorMessage {
+                    ContentUnavailableView(
+                        "보드를 만들지 못했습니다",
+                        systemImage: "exclamationmark.triangle",
+                        description: Text(errorMessage)
+                    )
+                    .overlay(alignment: .bottom) {
+                        Button("닫기") { dismiss() }
+                            .buttonStyle(MRPrimaryButtonStyle())
+                            .padding(20)
+                    }
+                } else {
+                    GenerationProgressView(step: step, progress: progress)
+                }
+            }
+            .background(MRColor.background.ignoresSafeArea())
+            .toolbar {
+                if draft == nil && errorMessage == nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button("취소") { dismiss() }
+                    }
+                }
+            }
+        }
+        .task {
+            let generator = BoardGenerationService()
+            do {
+                draft = try await generator.generate(from: summary) { newStep, newProgress in
+                    step = newStep
+                    progress = newProgress
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+}
+
+struct GenerationProgressView: View {
+    let step: GenerationStep
+    let progress: Double
+
+    var body: some View {
+        VStack(spacing: 26) {
+            Spacer()
+            MRLoadingRing(progress: progress)
+            VStack(spacing: 7) {
+                Text("보드 생성 중")
+                    .font(.title2.weight(.bold))
+                Text(step.title)
+                    .font(.subheadline)
+                    .foregroundStyle(MRColor.secondaryText)
+            }
+            VStack(alignment: .leading, spacing: 13) {
+                ForEach(GenerationStep.allCases) { item in
+                    HStack(spacing: 10) {
+                        Image(systemName: stateSymbol(for: item))
