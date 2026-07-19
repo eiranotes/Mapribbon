@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   test:
@@ -39,23 +40,51 @@ jobs:
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
 
       - name: Run Xcode tests
+        id: xcode
         shell: bash
         run: |
-          set -euo pipefail
+          set +e
           LOG_FILE="$RUNNER_TEMP/xcodebuild.log"
-          if xcodebuild test \
+          REPORT_FILE="$RUNNER_TEMP/xcode-report.txt"
+          xcodebuild test \
             -project MapRibbon.xcodeproj \
             -scheme MapRibbon \
             -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
             CODE_SIGNING_ALLOWED=NO \
-            >"$LOG_FILE" 2>&1; then
+            >"$LOG_FILE" 2>&1
+          STATUS=$?
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" -eq 0 ]; then
             tail -n 80 "$LOG_FILE"
           else
-            echo "::group::Xcode errors"
-            grep -nE "error:|BUILD FAILED|TEST FAILED|Testing failed|The following build commands failed" "$LOG_FILE" | tail -n 160 || true
-            echo "::endgroup::"
-            echo "::group::Xcode log tail"
-            tail -n 220 "$LOG_FILE"
-            echo "::endgroup::"
-            exit 1
+            {
+              echo "Compiler and test diagnostics:"
+              grep -nE "error:|BUILD FAILED|TEST FAILED|Testing failed|The following build commands failed" "$LOG_FILE" | tail -n 120 || true
+              echo
+              echo "Final Xcode log lines:"
+              tail -n 120 "$LOG_FILE"
+            } > "$REPORT_FILE"
+            cat "$REPORT_FILE"
           fi
+          exit 0
+
+      - name: Report Xcode failure on the pull request
+        if: steps.xcode.outputs.status != '0' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          {
+            echo '<!-- mapribbon-xcode-ci -->'
+            echo '### Xcode 테스트 실패'
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/xcode-report.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/pr-comment.md"
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file "$RUNNER_TEMP/pr-comment.md"
+          exit 1
+
+      - name: Fail main-branch run when Xcode tests fail
+        if: steps.xcode.outputs.status != '0' && github.event_name != 'pull_request'
+        run: exit 1
