@@ -223,8 +223,8 @@ final class MapSnapshotService {
             latitude: (minLat + maxLat) / 2,
             longitude: (minLon + maxLon) / 2
         )
-        let latitudeDelta = max(0.045, (maxLat - minLat) * 2.10)
-        let longitudeDelta = max(0.055, (maxLon - minLon) * 2.10)
+        let latitudeDelta = max(0.030, (maxLat - minLat) * 1.45)
+        let longitudeDelta = max(0.036, (maxLon - minLon) * 1.45)
 
         return MKCoordinateRegion(
             center: center,
@@ -261,7 +261,9 @@ final class BoardGenerationService {
                 BoardPlace(
                     id: cluster.id,
                     title: placeName.title,
-                    subtitle: placeName.subtitle,
+                    subtitle: nil,
+                    caption: nil,
+                    addressSummary: placeName.subtitle,
                     administrativeArea: placeName.administrativeArea,
                     locality: placeName.locality,
                     latitude: cluster.latitude,

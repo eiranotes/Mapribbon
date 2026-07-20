@@ -11,26 +11,28 @@ struct BoardsHomeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
+            VStack(spacing: MRSpacing.section) {
                 header
 
-                if !photoLibrary.canReadLibrary {
-                    permissionCard
-                } else if photoLibrary.isScanning {
-                    scanningCard
-                } else if let recommended = photoLibrary.daySummaries.first {
-                    recommendedCard(recommended)
-                } else {
-                    noPhotosCard
+                Group {
+                    if !photoLibrary.canReadLibrary {
+                        permissionStart
+                    } else if photoLibrary.isScanning {
+                        scanningState
+                    } else if let recommended = photoLibrary.daySummaries.first {
+                        travelDayStart(recommended)
+                    } else {
+                        noPhotosState
+                    }
                 }
 
-                if photoLibrary.canReadLibrary {
+                if photoLibrary.canReadLibrary, !photoLibrary.daySummaries.isEmpty {
                     Button {
                         showingAllDates = true
                     } label: {
-                        Label("새 보드 만들기", systemImage: "plus")
+                        Label("다른 날짜 찾아보기", systemImage: "calendar")
                     }
-                    .buttonStyle(MRPrimaryButtonStyle())
+                    .buttonStyle(MRSecondaryButtonStyle())
                 }
 
                 if !boards.isEmpty {
@@ -41,7 +43,7 @@ struct BoardsHomeView: View {
                     .font(.footnote)
                     .foregroundStyle(MRColor.secondaryText)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.bottom, 16)
+                    .padding(.bottom, 18)
             }
             .padding(.horizontal, MRSpacing.screen)
         }
@@ -71,10 +73,16 @@ struct BoardsHomeView: View {
 
     private var header: some View {
         HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("보드")
+            VStack(alignment: .leading, spacing: 5) {
+                Text("MapRibbon")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(MRColor.accent)
+                    .textCase(.uppercase)
+                    .tracking(1.2)
+                Text("어느 하루를 엮을까요?")
                     .font(.largeTitle.weight(.bold))
-                Text("여행한 하루를 한 장으로 남겨요")
+                    .foregroundStyle(MRColor.primaryText)
+                Text("사진의 시간과 장소로 여행 보드를 만듭니다")
                     .font(.subheadline)
                     .foregroundStyle(MRColor.secondaryText)
             }
@@ -88,192 +96,287 @@ struct BoardsHomeView: View {
                     .frame(width: 44, height: 44)
                     .background(MRColor.elevatedSurface)
                     .clipShape(Circle())
-                    .overlay { Circle().stroke(MRColor.border.opacity(0.55), lineWidth: 0.7) }
+                    .overlay { Circle().stroke(MRColor.border.opacity(0.8), lineWidth: 0.7) }
             }
             .buttonStyle(MRPressableStyle())
             .accessibilityLabel("설정")
         }
-        .padding(.top, 14)
+        .padding(.top, 16)
     }
 
-    private var permissionCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 13) {
-                Image(systemName: "photo.on.rectangle.angled")
+    private var permissionStart: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Image(systemName: "photo.stack")
                     .font(.title2.weight(.semibold))
                     .foregroundStyle(MRColor.accent)
-                    .frame(width: 46, height: 46)
+                    .frame(width: 48, height: 48)
                     .background(MRColor.accentSoft)
-                    .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("사진 접근이 필요합니다")
+                    .clipShape(RoundedRectangle(cornerRadius: MRRadius.control, style: .continuous))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("사진에서 여행한 하루 찾기")
                         .font(.title3.weight(.bold))
-                    Text("위치가 포함된 사진의 날짜와 장소를 읽어 자동 보드를 만듭니다.")
+                    Text("현재 위치가 아니라 사진에 저장된 날짜와 장소만 읽습니다.")
                         .font(.subheadline)
                         .foregroundStyle(MRColor.secondaryText)
                 }
             }
 
-            Button("사진 접근 허용") {
+            RoutePreviewStrip(identifiers: [])
+
+            Button("사진 접근 계속") {
                 Task { await photoLibrary.requestAccess() }
             }
             .buttonStyle(MRPrimaryButtonStyle())
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .mrCard()
+        .mrCard(padding: 18, shadow: false)
     }
 
-    private var scanningCard: some View {
-        HStack(spacing: 14) {
-            ProgressView().tint(MRColor.accent)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("사진 보관함 확인 중")
-                    .font(.headline)
-                Text("위치가 있는 날짜만 빠르게 찾고 있습니다.")
-                    .font(.footnote)
-                    .foregroundStyle(MRColor.secondaryText)
+    private var scanningState: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 12) {
+                ProgressView().tint(MRColor.accent)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("여행한 날짜를 찾고 있습니다")
+                        .font(.headline)
+                    Text("위치가 포함된 사진만 기기 안에서 빠르게 확인합니다.")
+                        .font(.footnote)
+                        .foregroundStyle(MRColor.secondaryText)
+                }
             }
-            Spacer()
+            MRRouteThread(progress: 0.58)
         }
-        .mrCard()
+        .mrCard(padding: 18)
     }
 
-    private func recommendedCard(_ summary: PhotoDaySummary) -> some View {
+    private func travelDayStart(_ summary: PhotoDaySummary) -> some View {
         Button {
             selectedSummary = summary
         } label: {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    MRStatusBadge(text: "오늘의 추천", symbol: "sparkles")
+            VStack(alignment: .leading, spacing: 17) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("추천 여행일")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(MRColor.accent)
+                            .textCase(.uppercase)
+                            .tracking(0.8)
+                        Text(summary.date.mrDayTitle)
+                            .font(.title2.weight(.bold))
+                            .foregroundStyle(MRColor.primaryText)
+                    }
                     Spacer()
-                    Image(systemName: "arrow.up.right")
-                        .font(.footnote.weight(.semibold))
+                    Text("\(summary.photoCount)장 · 약 \(summary.estimatedPlaceCount)곳")
+                        .font(.footnote.weight(.semibold).monospacedDigit())
                         .foregroundStyle(MRColor.secondaryText)
                 }
 
-                HStack(spacing: 15) {
-                    AssetThumbnailView(identifier: summary.thumbnailIdentifier, size: CGSize(width: 108, height: 108))
-                        .frame(width: 108, height: 108)
-                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                RoutePreviewStrip(identifiers: Array(summary.assets.prefix(3).map(\.id)))
 
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(summary.date.mrDayTitle)
-                            .font(.title3.weight(.bold))
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("이 하루로 보드 만들기")
+                            .font(.headline)
                             .foregroundStyle(MRColor.primaryText)
-                        Text("사진 \(summary.photoCount)장 · 약 \(summary.estimatedPlaceCount)곳")
-                            .font(.subheadline)
+                        Text("사진 순서와 지도를 자동으로 엮습니다")
+                            .font(.footnote)
                             .foregroundStyle(MRColor.secondaryText)
-                        Text("이 날짜로 바로 만들기")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(MRColor.accent)
                     }
                     Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(MRColor.accent)
+                        .clipShape(Circle())
                 }
             }
             .contentShape(Rectangle())
         }
         .buttonStyle(MRPressableStyle())
-        .mrCard()
+        .mrCard(padding: 18, shadow: true)
     }
 
-    private var noPhotosCard: some View {
-        VStack(alignment: .leading, spacing: 13) {
+    private var noPhotosState: some View {
+        VStack(alignment: .leading, spacing: 15) {
             Image(systemName: "mappin.slash")
                 .font(.title2.weight(.semibold))
                 .foregroundStyle(MRColor.secondaryText)
-            Text("위치 사진을 찾지 못했습니다")
+            Text("아직 엮을 여행일을 찾지 못했습니다")
                 .font(.title3.weight(.bold))
-            Text("카메라의 위치정보가 켜진 사진이 2장 이상 있는 날짜가 필요합니다.")
+            Text("위치정보가 켜진 사진이 두 장 이상 있는 날짜가 필요합니다. 아래로 당겨 다시 확인할 수 있습니다.")
                 .font(.subheadline)
                 .foregroundStyle(MRColor.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .mrCard()
+        .mrCard(padding: 18)
     }
 
     private var recentBoards: some View {
-        VStack(spacing: 13) {
-            MRSectionHeader(title: "최근 보드", subtitle: "저장한 여행을 다시 열어보세요", trailing: "보관함")
+        VStack(spacing: 14) {
+            MRSectionHeader(title: "최근 보드", subtitle: "완성한 여행 기록")
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
-                    ForEach(boards.prefix(5)) { board in
+                HStack(alignment: .top, spacing: 16) {
+                    ForEach(boards.prefix(6)) { board in
                         NavigationLink {
                             SavedBoardDetailView(board: board)
                         } label: {
-                            BoardPosterCard(board: board)
-                                .frame(width: 150)
+                            BoardPosterCard(board: board, width: 152)
                         }
                         .buttonStyle(MRPressableStyle())
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 5)
             }
         }
     }
 }
 
+private struct RoutePreviewStrip: View {
+    let identifiers: [String]
+
+    var body: some View {
+        ZStack {
+            MRRouteThread(progress: 1)
+                .padding(.horizontal, 34)
+            HStack(spacing: 0) {
+                ForEach(0..<3, id: \.self) { index in
+                    Group {
+                        if identifiers.indices.contains(index) {
+                            AssetThumbnailView(identifier: identifiers[index], size: CGSize(width: 74, height: 74))
+                        } else {
+                            MRPhotoPlaceholder()
+                        }
+                    }
+                    .frame(width: 74, height: 74)
+                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(Color.white, lineWidth: 3)
+                    }
+                    .shadow(color: .black.opacity(0.12), radius: 5, y: 3)
+                    .rotationEffect(.degrees([-3, 2, -1][index]))
+                    if index < 2 { Spacer(minLength: 18) }
+                }
+            }
+        }
+        .frame(height: 88)
+        .accessibilityHidden(true)
+    }
+}
+
 struct BoardLibraryView: View {
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedBoard.createdAt, order: .reverse) private var boards: [SavedBoard]
 
     private let columns = [
-        GridItem(.flexible(), spacing: 14),
-        GridItem(.flexible(), spacing: 14)
+        GridItem(.flexible(), spacing: 16),
+        GridItem(.flexible(), spacing: 16)
     ]
+
+    private var groupedBoards: [(String, [SavedBoard])] {
+        let groups = Dictionary(grouping: boards) { $0.date.mrMonthSection }
+        return groups
+            .map { ($0.key, $0.value.sorted { $0.date > $1.date }) }
+            .sorted { lhs, rhs in
+                guard let ld = lhs.1.first?.date, let rd = rhs.1.first?.date else { return lhs.0 > rhs.0 }
+                return ld > rd
+            }
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("보관함").font(.largeTitle.weight(.bold))
-                        Text("저장한 여행 보드를 모아봅니다")
-                            .font(.subheadline)
-                            .foregroundStyle(MRColor.secondaryText)
-                    }
-                    Spacer()
-                    NavigationLink {
-                        SettingsView()
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .frame(width: 44, height: 44)
-                            .background(MRColor.elevatedSurface)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(MRPressableStyle())
-                }
-                .padding(.top, 14)
+            VStack(alignment: .leading, spacing: MRSpacing.section) {
+                libraryHeader
 
                 if boards.isEmpty {
-                    ContentUnavailableView(
-                        "아직 저장한 보드가 없습니다",
-                        systemImage: "books.vertical",
-                        description: Text("보드를 저장하면 날짜순으로 이곳에 쌓입니다.")
-                    )
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 80)
+                    emptyLibrary
                 } else {
-                    LazyVGrid(columns: columns, spacing: 18) {
-                        ForEach(boards) { board in
-                            NavigationLink {
-                                SavedBoardDetailView(board: board)
-                            } label: {
-                                BoardPosterCard(board: board)
+                    ForEach(groupedBoards, id: \.0) { month, monthBoards in
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 10) {
+                                Text(month)
+                                    .font(.headline.weight(.bold).monospacedDigit())
+                                    .foregroundStyle(MRColor.primaryText)
+                                Rectangle()
+                                    .fill(MRColor.border)
+                                    .frame(height: 0.7)
                             }
-                            .buttonStyle(MRPressableStyle())
+
+                            LazyVGrid(columns: columns, alignment: .leading, spacing: 22) {
+                                ForEach(monthBoards) { board in
+                                    NavigationLink {
+                                        SavedBoardDetailView(board: board)
+                                    } label: {
+                                        BoardPosterCard(board: board)
+                                    }
+                                    .buttonStyle(MRPressableStyle())
+                                    .contextMenu {
+                                        Button(role: .destructive) {
+                                            modelContext.delete(board)
+                                            try? modelContext.save()
+                                        } label: {
+                                            Label("삭제", systemImage: "trash")
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
             .padding(.horizontal, MRSpacing.screen)
-            .padding(.bottom, 36)
+            .padding(.bottom, 40)
         }
         .background(MRColor.background)
         .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private var libraryHeader: some View {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("보관함")
+                    .font(.largeTitle.weight(.bold))
+                Text("완성한 여행 보드를 날짜별로 모았습니다")
+                    .font(.subheadline)
+                    .foregroundStyle(MRColor.secondaryText)
+            }
+            Spacer()
+            NavigationLink {
+                SettingsView()
+            } label: {
+                Image(systemName: "gearshape")
+                    .foregroundStyle(MRColor.primaryText)
+                    .frame(width: 44, height: 44)
+                    .background(MRColor.elevatedSurface)
+                    .clipShape(Circle())
+                    .overlay { Circle().stroke(MRColor.border.opacity(0.8), lineWidth: 0.7) }
+            }
+            .buttonStyle(MRPressableStyle())
+        }
+        .padding(.top, 16)
+    }
+
+    private var emptyLibrary: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "rectangle.stack.badge.plus")
+                .font(.system(size: 38, weight: .medium))
+                .foregroundStyle(MRColor.accent)
+            Text("아직 저장한 보드가 없습니다")
+                .font(.title3.weight(.bold))
+            Text("보드 탭에서 여행한 날짜를 선택하면 완성한 기록이 이곳에 쌓입니다.")
+                .font(.subheadline)
+                .foregroundStyle(MRColor.secondaryText)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 86)
     }
 }
 
 private struct BoardPosterCard: View {
     let board: SavedBoard
+    var width: CGFloat? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -289,21 +392,23 @@ private struct BoardPosterCard: View {
             .aspectRatio(0.72, contentMode: .fit)
             .frame(maxWidth: .infinity)
             .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .shadow(color: .black.opacity(0.11), radius: 8, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 0.7)
+            }
+            .shadow(color: .black.opacity(0.14), radius: 8, y: 5)
 
             Text(board.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(MRColor.primaryText)
                 .lineLimit(1)
-            Text(board.date.mrDayTitle)
-                .font(.caption)
+            Text("\(board.date.mrDayTitle) · \(board.photoCount)장")
+                .font(.caption.monospacedDigit())
                 .foregroundStyle(MRColor.secondaryText)
+                .lineLimit(1)
         }
-        .padding(10)
-        .background(MRColor.elevatedSurface)
-        .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-        .overlay { RoundedRectangle(cornerRadius: 13).stroke(MRColor.border.opacity(0.55), lineWidth: 0.7) }
+        .frame(width: width)
     }
 }
 
@@ -335,7 +440,7 @@ struct DateSelectionView: View {
                                     .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(MRColor.primaryText)
                                 Text("사진 \(summary.photoCount)장 · 약 \(summary.estimatedPlaceCount)곳")
-                                    .font(.footnote)
+                                    .font(.footnote.monospacedDigit())
                                     .foregroundStyle(MRColor.secondaryText)
                             }
                             Spacer()
@@ -367,14 +472,29 @@ struct AssetThumbnailView: View {
     var body: some View {
         Group {
             if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
             } else {
                 MRPhotoPlaceholder()
             }
         }
         .task(id: identifier) {
             guard let identifier else { return }
-            image = await PhotoImageService.shared.image(for: identifier, targetSize: size)
+            let result = PHAsset.fetchAssets(withLocalIdentifiers: [identifier], options: nil)
+            guard let asset = result.firstObject else { return }
+            let options = PHImageRequestOptions()
+            options.deliveryMode = .opportunistic
+            options.resizeMode = .fast
+            options.isNetworkAccessAllowed = true
+            PHImageManager.default().requestImage(
+                for: asset,
+                targetSize: CGSize(width: size.width * 2, height: size.height * 2),
+                contentMode: .aspectFill,
+                options: options
+            ) { value, _ in
+                if let value { image = value }
+            }
         }
     }
 }

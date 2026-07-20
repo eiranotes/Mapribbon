@@ -6,6 +6,7 @@ import UIKit
 struct MapRibbonApp: App {
     @State private var photoLibrary = PhotoLibraryService()
     @State private var store = StoreService()
+    @State private var router = AppRouter()
 
     private var launchArguments: [String] {
         ProcessInfo.processInfo.arguments
@@ -48,6 +49,7 @@ struct MapRibbonApp: App {
             }
             .environment(photoLibrary)
             .environment(store)
+            .environment(router)
             .tint(MRColor.accent)
         }
         .modelContainer(for: SavedBoard.self)
@@ -111,10 +113,9 @@ private struct ScreenshotPlacesFixtureView: View {
 }
 
 @MainActor
-private enum BoardScreenshotFixture {
+enum BoardScreenshotFixture {
     private struct PlaceSpec {
         let title: String
-        let subtitle: String
         let symbol: String
         let colors: [UIColor]
         let point: CGPoint
@@ -127,7 +128,6 @@ private enum BoardScreenshotFixture {
         let specs: [PlaceSpec] = [
             PlaceSpec(
                 title: "경복궁",
-                subtitle: "오전 10:30–오전 11:20",
                 symbol: "building.columns.fill",
                 colors: [UIColor(red: 0.28, green: 0.55, blue: 0.72, alpha: 1), UIColor(red: 0.70, green: 0.84, blue: 0.88, alpha: 1)],
                 point: CGPoint(x: 0.16, y: 0.18),
@@ -135,7 +135,6 @@ private enum BoardScreenshotFixture {
             ),
             PlaceSpec(
                 title: "광장시장",
-                subtitle: "오후 12:10–오후 12:52",
                 symbol: "storefront.fill",
                 colors: [UIColor(red: 0.70, green: 0.31, blue: 0.20, alpha: 1), UIColor(red: 0.94, green: 0.69, blue: 0.28, alpha: 1)],
                 point: CGPoint(x: 0.80, y: 0.24),
@@ -143,7 +142,6 @@ private enum BoardScreenshotFixture {
             ),
             PlaceSpec(
                 title: "시청 카페",
-                subtitle: "오후 1:10–오후 1:38",
                 symbol: "cup.and.saucer.fill",
                 colors: [UIColor(red: 0.43, green: 0.34, blue: 0.27, alpha: 1), UIColor(red: 0.78, green: 0.64, blue: 0.46, alpha: 1)],
                 point: CGPoint(x: 0.38, y: 0.50),
@@ -151,7 +149,6 @@ private enum BoardScreenshotFixture {
             ),
             PlaceSpec(
                 title: "덕수궁 돌담길",
-                subtitle: "오후 3:20–오후 4:05",
                 symbol: "tree.fill",
                 colors: [UIColor(red: 0.20, green: 0.42, blue: 0.25, alpha: 1), UIColor(red: 0.62, green: 0.72, blue: 0.46, alpha: 1)],
                 point: CGPoint(x: 0.18, y: 0.76),
@@ -159,7 +156,6 @@ private enum BoardScreenshotFixture {
             ),
             PlaceSpec(
                 title: "한강 야경",
-                subtitle: "오후 6:10–오후 8:40",
                 symbol: "moon.stars.fill",
                 colors: [UIColor(red: 0.05, green: 0.13, blue: 0.27, alpha: 1), UIColor(red: 0.18, green: 0.35, blue: 0.50, alpha: 1)],
                 point: CGPoint(x: 0.82, y: 0.84),
@@ -176,7 +172,9 @@ private enum BoardScreenshotFixture {
             BoardPlace(
                 id: placeIDs[index],
                 title: spec.title,
-                subtitle: spec.subtitle,
+                subtitle: nil,
+                caption: nil,
+                addressSummary: "서울특별시",
                 administrativeArea: "서울특별시",
                 locality: "서울",
                 latitude: 37.56 + Double(index) * 0.002,
