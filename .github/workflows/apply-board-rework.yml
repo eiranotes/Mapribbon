@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/staging/**
       - .github/workflows/apply-board-rework.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/staging/**
+      - .github/workflows/apply-board-rework.yml
 
 permissions:
   contents: write
