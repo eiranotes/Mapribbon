@@ -262,6 +262,8 @@ final class BoardGenerationService {
                     id: cluster.id,
                     title: placeName.title,
                     subtitle: nil,
+                    caption: nil,
+                    addressSummary: placeName.subtitle,
                     administrativeArea: placeName.administrativeArea,
                     locality: placeName.locality,
                     latitude: cluster.latitude,

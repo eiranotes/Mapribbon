@@ -169,56 +169,18 @@ private struct PermissionExplainerView: View {
     }
 }
 
+@MainActor
 private struct OnboardingBoardPreview: View {
+    @State private var draft: BoardDraft
+
+    init() {
+        _draft = State(initialValue: BoardScreenshotFixture.makeDraft())
+    }
+
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            ZStack {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color(hex: 0xA97845))
-                DemoCorkTexture().clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color(hex: 0xF1EBDD))
-                    .overlay(DemoMapLines().opacity(0.65))
-                    .padding(size.width * 0.045)
-                    .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
-
-                DemoRope(start: CGPoint(x: 0.28, y: 0.37), end: CGPoint(x: 0.72, y: 0.55), size: size)
-                DemoRope(start: CGPoint(x: 0.72, y: 0.55), end: CGPoint(x: 0.34, y: 0.76), size: size)
-
-                DemoPolaroid(symbol: "building.columns.fill", title: "경복궁", tint: Color(hex: 0x6DA4C4))
-                    .frame(width: size.width * 0.29, height: size.height * 0.25)
-                    .rotationEffect(.degrees(-4))
-                    .position(x: size.width * 0.28, y: size.height * 0.39)
-                DemoPolaroid(symbol: "storefront.fill", title: "시장", tint: Color(hex: 0xD67C54))
-                    .frame(width: size.width * 0.28, height: size.height * 0.25)
-                    .rotationEffect(.degrees(4))
-                    .position(x: size.width * 0.72, y: size.height * 0.56)
-                DemoPolaroid(symbol: "tree.fill", title: "돌담길", tint: Color(hex: 0x6F9B70))
-                    .frame(width: size.width * 0.29, height: size.height * 0.25)
-                    .rotationEffect(.degrees(-3))
-                    .position(x: size.width * 0.34, y: size.height * 0.77)
-
-                DemoPin(asset: "RoutePinBlue", position: CGPoint(x: 0.28, y: 0.29), size: size)
-                DemoPin(asset: "RoutePinTeal", position: CGPoint(x: 0.72, y: 0.46), size: size)
-                DemoPin(asset: "RoutePinCream", position: CGPoint(x: 0.34, y: 0.67), size: size)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("2026년 7월 18일")
-                        .font(.system(size: size.width * 0.034, weight: .medium))
-                    Text("서울 하루 산책")
-                        .font(.system(size: size.width * 0.066, weight: .bold))
-                }
-                .foregroundStyle(MRColor.ink)
-                .padding(size.width * 0.045)
-                .background(Color(hex: 0xFBF8F0))
-                .rotationEffect(.degrees(-1))
-                .shadow(color: .black.opacity(0.14), radius: 5, y: 3)
-                .position(x: size.width * 0.36, y: size.height * 0.14)
-            }
-        }
-        .accessibilityHidden(true)
+        BoardCanvasView(model: draft.renderModel, watermark: false)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityHidden(true)
     }
 }
 

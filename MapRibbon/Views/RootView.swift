@@ -1,4 +1,17 @@
 import SwiftUI
+import Observation
+
+enum MRMainTab: Hashable {
+    case boards
+    case library
+    case atlas
+}
+
+@MainActor
+@Observable
+final class AppRouter {
+    var selectedTab: MRMainTab = .boards
+}
 
 struct RootView: View {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
@@ -15,17 +28,12 @@ struct RootView: View {
     }
 }
 
-enum MRMainTab: Hashable {
-    case boards
-    case library
-    case atlas
-}
-
 struct MainTabView: View {
-    @State private var selection: MRMainTab = .boards
+    @Environment(AppRouter.self) private var router
 
     var body: some View {
-        TabView(selection: $selection) {
+        @Bindable var router = router
+        TabView(selection: $router.selectedTab) {
             NavigationStack { BoardsHomeView() }
                 .tag(MRMainTab.boards)
                 .tabItem { Label("보드", systemImage: "rectangle.stack") }

@@ -193,7 +193,7 @@ struct BoardsHomeView: View {
 
     private var recentBoards: some View {
         VStack(spacing: 13) {
-            MRSectionHeader(title: "최근 보드", subtitle: "저장한 여행을 다시 열어보세요", trailing: "보관함")
+            MRSectionHeader(title: "최근 보드", subtitle: "저장한 여행을 다시 열어보세요")
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
                     ForEach(boards.prefix(5)) { board in

@@ -6,6 +6,7 @@ import UIKit
 struct MapRibbonApp: App {
     @State private var photoLibrary = PhotoLibraryService()
     @State private var store = StoreService()
+    @State private var router = AppRouter()
 
     private var launchArguments: [String] {
         ProcessInfo.processInfo.arguments
@@ -48,6 +49,7 @@ struct MapRibbonApp: App {
             }
             .environment(photoLibrary)
             .environment(store)
+            .environment(router)
             .tint(MRColor.accent)
         }
         .modelContainer(for: SavedBoard.self)
@@ -111,7 +113,7 @@ private struct ScreenshotPlacesFixtureView: View {
 }
 
 @MainActor
-private enum BoardScreenshotFixture {
+enum BoardScreenshotFixture {
     private struct PlaceSpec {
         let title: String
         let subtitle: String

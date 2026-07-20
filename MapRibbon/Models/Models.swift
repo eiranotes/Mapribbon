@@ -48,6 +48,8 @@ struct BoardPlace: Identifiable, Hashable, Codable {
     var id: UUID
     var title: String
     var subtitle: String?
+    var caption: String? = nil
+    var addressSummary: String? = nil
     var administrativeArea: String?
     var locality: String?
     var latitude: Double

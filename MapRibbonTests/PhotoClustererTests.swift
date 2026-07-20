@@ -39,23 +39,63 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertGreaterThan(story[0].widthFactor, poster[0].widthFactor)
     }
 
-    func testGeoSeededLayoutAvoidsPhotoOverlap() {
-        let geoPoints = [
-            CGPoint(x: 0.16, y: 0.18), CGPoint(x: 0.80, y: 0.24), CGPoint(x: 0.38, y: 0.50),
-            CGPoint(x: 0.18, y: 0.76), CGPoint(x: 0.82, y: 0.84)
-        ]
-        for aspectRatio in [CGFloat(9.0 / 16.0), 3.0 / 4.0, 4.0 / 5.0] {
-            let placements = BoardLayoutEngine.placements(count: geoPoints.count, geoPoints: geoPoints, aspectRatio: aspectRatio)
-            XCTAssertEqual(placements.count, geoPoints.count)
-            assertNoOverlap(placements, aspectRatio: aspectRatio)
+    func testAllSupportedCountsAvoidOverlapAcrossExportRatios() {
+        let aspectRatios: [CGFloat] = [9.0 / 16.0, 4.0 / 5.0, 3.0 / 4.0]
+        for count in 1...8 {
+            for aspectRatio in aspectRatios {
+                let points = Array(sampleGeoPoints.prefix(count))
+                let placements = BoardLayoutEngine.placements(count: count, geoPoints: points, aspectRatio: aspectRatio)
+                XCTAssertEqual(placements.count, count)
+                assertNoOverlap(placements, aspectRatio: aspectRatio)
+                assertInsideBounds(placements, aspectRatio: aspectRatio)
+            }
         }
     }
 
-    func testDegenerateGeoPointsStillProduceValidLayout() {
+    func testGeoSeededLayoutDoesNotDriftExcessively() {
+        let geographicSample = Array(sampleGeoPoints.prefix(5))
+        let placements = BoardLayoutEngine.placements(
+            count: geographicSample.count,
+            geoPoints: geographicSample,
+            aspectRatio: 3.0 / 4.0
+        )
+        for (placement, seed) in zip(placements, geographicSample) {
+            let displacement = hypot(placement.center.x - seed.x, placement.center.y - seed.y)
+            XCTAssertLessThanOrEqual(displacement, BoardLayoutEngine.maxGeoDisplacement + 0.02)
+        }
+    }
+
+    func testDegenerateGeoPointsFallBackToValidLayout() {
         let samePoint = Array(repeating: CGPoint(x: 0.5, y: 0.5), count: 5)
         let placements = BoardLayoutEngine.placements(count: 5, geoPoints: samePoint, aspectRatio: 3.0 / 4.0)
         XCTAssertEqual(placements.count, 5)
         assertNoOverlap(placements, aspectRatio: 3.0 / 4.0)
+    }
+
+    func testAspectFillPointAdjustmentMatchesMapCropping() {
+        let points = [CGPoint(x: 0.25, y: 0.25), CGPoint(x: 0.75, y: 0.75)]
+        let story = BoardLayoutEngine.adjustedForAspectFill(points, sourceAspectRatio: 3.0 / 4.0, targetAspectRatio: 9.0 / 16.0)
+        XCTAssertEqual(story[0].x, 1.0 / 6.0, accuracy: 0.001)
+        XCTAssertEqual(story[1].x, 5.0 / 6.0, accuracy: 0.001)
+
+        let feed = BoardLayoutEngine.adjustedForAspectFill(points, sourceAspectRatio: 3.0 / 4.0, targetAspectRatio: 4.0 / 5.0)
+        XCTAssertEqual(feed[0].y, 0.2333, accuracy: 0.001)
+        XCTAssertEqual(feed[1].y, 0.7667, accuracy: 0.001)
+    }
+
+    func testThreadPaletteProvidesDistinctRenderColors() {
+        XCTAssertEqual(BoardThreadColor.allCases.count, 6)
+        XCTAssertEqual(Set(BoardThreadColor.allCases.map(\.primaryHex)).count, 6)
+        XCTAssertTrue(BoardThreadColor.allCases.allSatisfy { $0.primaryHex != $0.highlightHex })
+    }
+
+    private var sampleGeoPoints: [CGPoint] {
+        [
+            CGPoint(x: 0.16, y: 0.18), CGPoint(x: 0.80, y: 0.24),
+            CGPoint(x: 0.38, y: 0.50), CGPoint(x: 0.18, y: 0.76),
+            CGPoint(x: 0.82, y: 0.84), CGPoint(x: 0.68, y: 0.62),
+            CGPoint(x: 0.47, y: 0.72), CGPoint(x: 0.84, y: 0.48)
+        ]
     }
 
     private func assertNoOverlap(_ placements: [BoardCardPlacement], aspectRatio: CGFloat, file: StaticString = #filePath, line: UInt = #line) {
@@ -75,10 +115,15 @@ final class PhotoClustererTests: XCTestCase {
         }
     }
 
-    func testThreadPaletteProvidesDistinctRenderColors() {
-        XCTAssertEqual(BoardThreadColor.allCases.count, 6)
-        XCTAssertEqual(Set(BoardThreadColor.allCases.map(\.primaryHex)).count, 6)
-        XCTAssertTrue(BoardThreadColor.allCases.allSatisfy { $0.primaryHex != $0.highlightHex })
+    private func assertInsideBounds(_ placements: [BoardCardPlacement], aspectRatio: CGFloat, file: StaticString = #filePath, line: UInt = #line) {
+        for placement in placements {
+            let halfWidth = placement.widthFactor / 2
+            let halfHeight = placement.widthFactor * BoardLayoutEngine.cardHeightRatio * aspectRatio / 2
+            XCTAssertGreaterThanOrEqual(placement.center.x - halfWidth, 0, file: file, line: line)
+            XCTAssertLessThanOrEqual(placement.center.x + halfWidth, 1, file: file, line: line)
+            XCTAssertGreaterThanOrEqual(placement.center.y - halfHeight, 0, file: file, line: line)
+            XCTAssertLessThanOrEqual(placement.center.y + halfHeight, 1, file: file, line: line)
+        }
     }
 
     private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {
