@@ -1,1 +1,0 @@
-Trigger the temporary screenshot localization fixture workflow after the patch workflow is active.
