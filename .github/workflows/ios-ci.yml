@@ -1,54 +1,178 @@
-name: Apply screenshot localization fixture
+name: iOS CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+      - agent/full-ui-overhaul
+      - agent/board-artwork-atlas-rework
 
 concurrency:
-  group: fixture-${{ github.ref }}
+  group: ios-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: write
 
 jobs:
-  apply:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+  test:
+    name: Build, capture, and test MapRibbon
+    runs-on: macos-15
+    timeout-minutes: 45
     steps:
-      - name: Checkout PR branch
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
-          fetch-depth: 1
-          show-progress: false
 
-      - name: Use locale-derived fixture captions
+      - name: Select an available iPhone simulator
+        id: simulator
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
+          xcodebuild -version
+          xcodebuild -showsdks
+          DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          payload = json.load(sys.stdin)
+          preferred = ["iPhone 17 Pro", "iPhone 16 Pro", "iPhone 15 Pro"]
+          for runtime in sorted(payload.get("devices", {}), reverse=True):
+              phones = [d for d in payload["devices"][runtime] if d.get("isAvailable") and d.get("name", "").startswith("iPhone")]
+              if not phones:
+                  continue
+              for name in preferred:
+                  match = next((d for d in phones if d.get("name") == name), None)
+                  if match:
+                      print(match["udid"] + "|" + match["name"] + "|" + runtime)
+                      raise SystemExit
+              selected = next((d for d in phones if "Pro" in d.get("name", "")), phones[0])
+              print(selected["udid"] + "|" + selected["name"] + "|" + runtime)
+              raise SystemExit
+          ')"
+          IFS='|' read -r UDID DEVICE_NAME RUNTIME <<< "$DEVICE_INFO"
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          echo "name=$DEVICE_NAME" >> "$GITHUB_OUTPUT"
+          echo "runtime=$RUNTIME" >> "$GITHUB_OUTPUT"
 
-          path = Path("MapRibbon/App/MapRibbonApp.swift")
-          text = path.read_text()
-          old = '''                title: spec.title,
-                subtitle: spec.subtitle,
-                administrativeArea: "서울특별시",'''
-          new = '''                title: spec.title,
-                subtitle: nil,
-                caption: nil,
-                addressSummary: "서울특별시",
-                administrativeArea: "서울특별시",'''
-          if text.count(old) != 1:
-              raise SystemExit(f"expected one fixture snippet, found {text.count(old)}")
-          path.write_text(text.replace(old, new))
-          PY
+      - name: Build app for screenshots
+        id: build
+        shell: bash
+        run: |
+          set +e
+          LOG_FILE="$RUNNER_TEMP/xcodebuild-app.log"
+          xcodebuild build \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            >"$LOG_FILE" 2>&1
+          STATUS=$?
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" -ne 0 ]; then
+            grep -nE "error:|BUILD FAILED|The following build commands failed" "$LOG_FILE" | tail -n 160 || true
+            tail -n 160 "$LOG_FILE"
+          fi
+          exit 0
 
-          rm -f Scripts/fix-screenshot-localization-trigger.txt
-          git restore --source=HEAD -- .github/workflows
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --stat
-          git commit -m "test: localize screenshot fixture time ranges"
-          git push origin "HEAD:${GITHUB_HEAD_REF}"
+      - name: Capture current UI screens
+        if: steps.build.outputs.status == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+          OUT="$RUNNER_TEMP/mapribbon-board-rework"
+          mkdir -p "$OUT"
+
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance light || true
+          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState discharging --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
+
+          capture() {
+            local flag="$1"
+            local name="$2"
+            local language="${3:-ko}"
+            local locale="${4:-ko_KR}"
+            xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" "$flag" -AppleLanguages "($language)" -AppleLocale "$locale"
+            sleep 3
+            xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
+          }
+
+          capture --screenshot-onboarding onboarding
+          capture --screenshot-home home
+          capture --screenshot-library library
+          capture --screenshot-atlas atlas-korea
+          capture --screenshot-atlas-japan atlas-japan
+          capture --screenshot-settings settings
+          capture --screenshot-paywall paywall
+          capture --screenshot-generation generation
+          capture --screenshot-export export
+          capture --screenshot-places places
+          capture --screenshot-board-editor board-editor
+          capture --screenshot-board-canvas board-poster
+          capture --screenshot-board-feed board-feed
+          capture --screenshot-board-story board-story
+          capture --screenshot-board-canvas board-poster-ja ja ja_JP
+
+          {
+            echo "device=${{ steps.simulator.outputs.name }}"
+            echo "runtime=${{ steps.simulator.outputs.runtime }}"
+            echo "bundle_id=$BUNDLE_ID"
+            echo "commit=$GITHUB_SHA"
+          } > "$OUT/metadata.txt"
+          ls -lh "$OUT"
+
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-board-rework-screenshots
+          path: ${{ runner.temp }}/mapribbon-board-rework
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Run Xcode tests
+        id: xcode
+        shell: bash
+        run: |
+          set +e
+          LOG_FILE="$RUNNER_TEMP/xcodebuild-tests.log"
+          xcodebuild test \
+            -project MapRibbon.xcodeproj \
+            -scheme MapRibbon \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -derivedDataPath "$RUNNER_TEMP/DerivedData" \
+            -resultBundlePath "$RUNNER_TEMP/MapRibbon.xcresult" \
+            CODE_SIGNING_ALLOWED=NO \
+            >"$LOG_FILE" 2>&1
+          STATUS=$?
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          if [ "$STATUS" -eq 0 ]; then
+            tail -n 100 "$LOG_FILE"
+          else
+            grep -nE "error:|BUILD FAILED|TEST FAILED|Testing failed|The following build commands failed" "$LOG_FILE" | tail -n 160 || true
+            tail -n 160 "$LOG_FILE"
+          fi
+          exit 0
+
+      - name: Upload Xcode result bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapribbon-xcresult
+          path: |
+            ${{ runner.temp }}/MapRibbon.xcresult
+            ${{ runner.temp }}/xcodebuild-app.log
+            ${{ runner.temp }}/xcodebuild-tests.log
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Fail when build or tests fail
+        if: steps.build.outputs.status != '0' || steps.xcode.outputs.status != '0'
+        run: exit 1
