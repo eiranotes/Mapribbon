@@ -1,0 +1,37 @@
+        ATLAS_PREFIX + "\nstruct SettingsView: View",
+    )
+
+
+def patch_app_fixture() -> None:
+    path = "MapRibbon/App/MapRibbonApp.swift"
+    source = read(path)
+    source = source.replace(
+        """                } else if launchArguments.contains("--screenshot-atlas") {\n                    NavigationStack { AtlasView() }""",
+        """                } else if launchArguments.contains("--screenshot-atlas-japan") {\n                    NavigationStack { AtlasView(initialCountry: .japan) }\n                } else if launchArguments.contains("--screenshot-atlas") {\n                    NavigationStack { AtlasView() }""",
+    )
+    source = source.replace(
+        """                } else if launchArguments.contains("--screenshot-board-canvas") {\n                    BoardCanvasScreenshotFixtureView()""",
+        """                } else if launchArguments.contains("--screenshot-board-story") {\n                    BoardCanvasScreenshotFixtureView(aspectRatio: 9.0 / 16.0)\n                } else if launchArguments.contains("--screenshot-board-feed") {\n                    BoardCanvasScreenshotFixtureView(aspectRatio: 4.0 / 5.0)\n                } else if launchArguments.contains("--screenshot-board-canvas") {\n                    BoardCanvasScreenshotFixtureView(aspectRatio: 3.0 / 4.0)""",
+    )
+    write(path, source)
+    replace_once(
+        path,
+        r"@MainActor\nprivate struct BoardCanvasScreenshotFixtureView: View \{.*?\n\}\n\n@MainActor\nprivate struct ScreenshotExportFixtureView",
+        r'''@MainActor
+private struct BoardCanvasScreenshotFixtureView: View {
+    @State private var draft: BoardDraft
+    let aspectRatio: CGFloat
+
+    init(aspectRatio: CGFloat = 3.0 / 4.0) {
+        self.aspectRatio = aspectRatio
+        _draft = State(initialValue: BoardScreenshotFixture.makeDraft())
+    }
+
+    var body: some View {
+        ZStack {
+            MRColor.background.ignoresSafeArea()
+            BoardCanvasView(model: draft.renderModel, watermark: false)
+                .aspectRatio(aspectRatio, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
+                .padding(.horizontal, 18)
