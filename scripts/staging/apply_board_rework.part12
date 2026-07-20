@@ -7,10 +7,9 @@
 
 
 def cleanup() -> None:
-    for relative in ["scripts/apply_board_rework.py", ".github/workflows/apply-board-rework.yml"]:
-        target = ROOT / relative
-        if target.exists():
-            target.unlink()
+    target = ROOT / "scripts/apply_board_rework.py"
+    if target.exists():
+        target.unlink()
 
 
 if __name__ == "__main__":
@@ -20,6 +19,5 @@ if __name__ == "__main__":
     patch_app_fixture()
     patch_region_normalizer()
     patch_tests()
-    patch_ci()
     cleanup()
     print("Applied MapRibbon board artwork and atlas rework")
