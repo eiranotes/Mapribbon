@@ -1,0 +1,1 @@
+Trigger the temporary screenshot localization fixture workflow. This file is removed by the workflow commit.
