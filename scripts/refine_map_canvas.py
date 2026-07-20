@@ -53,3 +53,4 @@ ci = '.github/workflows/ios-ci.yml'
 replace(ci, '          capture --screenshot-board-editor board-editor\n', '          capture --screenshot-board-editor board-editor\n          capture --screenshot-thread-colors thread-colors\n')
 
 print('Refined full-height wide map canvas and thread color screenshot state')
+# Trigger after the workflow exists on the branch.
