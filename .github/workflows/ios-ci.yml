@@ -99,16 +99,17 @@ jobs:
             local name="$2"
             local language="${3:-ko}"
             local locale="${4:-ko_KR}"
+            local wait_seconds="${5:-3}"
             xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" "$flag" -AppleLanguages "($language)" -AppleLocale "$locale"
-            sleep 3
+            sleep "$wait_seconds"
             xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
           }
 
           capture --screenshot-onboarding onboarding
           capture --screenshot-home home
           capture --screenshot-library library
-          capture --screenshot-atlas atlas-korea
-          capture --screenshot-atlas-japan atlas-japan
+          capture --screenshot-atlas atlas-korea ko ko_KR 8
+          capture --screenshot-atlas-japan atlas-japan ko ko_KR 8
           capture --screenshot-settings settings
           capture --screenshot-paywall paywall
           capture --screenshot-generation generation
