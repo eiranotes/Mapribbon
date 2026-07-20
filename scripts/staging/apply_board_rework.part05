@@ -1,0 +1,43 @@
+                                    .foregroundStyle(visited.contains(region.key) ? MRColor.primaryText : MRColor.secondaryText)
+                                Spacer()
+                            }
+                            .padding(.horizontal, 13)
+                            .frame(height: 50)
+                            .background(MRColor.elevatedSurface)
+                            .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                            .overlay { RoundedRectangle(cornerRadius: 11).stroke(MRColor.border.opacity(0.55), lineWidth: 0.7) }
+                        }
+                    }
+                }
+                .padding(.bottom, 24)
+            }
+            .padding(.horizontal, MRSpacing.screen)
+        }
+        .background(MRColor.background)
+        .toolbar(.hidden, for: .navigationBar)
+        .animation(.easeOut(duration: 0.18), value: country)
+    }
+}
+
+private struct CountryAtlasMap: View {
+    let country: AtlasCountry
+    let regions: [(key: String, name: String, point: CGPoint)]
+    let visited: Set<String>
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color(hex: 0xF2EBDD))
+                AtlasPaperTexture().clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                CountrySilhouette(country: country)
+                    .fill(Color(hex: 0xD9D1C1))
+                    .overlay { CountrySilhouette(country: country).stroke(Color(hex: 0x9E9586).opacity(0.85), lineWidth: 1.2) }
+                    .padding(country == .korea ? 38 : 28)
+                    .shadow(color: .black.opacity(0.08), radius: 5, y: 3)
+
+                ForEach(regions, id: \.key) { region in
+                    VStack(spacing: 3) {
+                        Circle()
+                            .fill(visited.contains(region.key) ? MRColor.accent : Color.white.opacity(0.88))
+                            .overlay { Circle().stroke(visited.contains(region.key) ? MRColor.accent : Color(hex: 0xAFA697), lineWidth: 1) }
+                            .frame(width: visited.contains(region.key) ? 20 : 13, height: visited.contains(region.key) ? 20 : 13)
