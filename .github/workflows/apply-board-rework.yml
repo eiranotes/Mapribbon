@@ -58,30 +58,42 @@ jobs:
           }
           cat "$RUNNER_TEMP/board-rework.log"
 
-      - name: Upload apply diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: board-rework-apply-log
-          path: ${{ runner.temp }}/board-rework.log
-          if-no-files-found: warn
-          retention-days: 3
-
       - name: Remove staging inputs
-        if: success()
         shell: bash
         run: |
           rm -rf scripts/staging
           rm -f scripts/board_rework_probe.txt scripts/staging_readme.txt
 
-      - name: Commit final source
-        if: success()
+      - name: Commit and push final source
+        id: publish
         shell: bash
         run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "feat: rebuild premium board artwork and dual-country atlas"
-          git push origin HEAD:agent/board-artwork-atlas-rework
+          set +e
+          LOG="$RUNNER_TEMP/board-rework-publish.log"
+          {
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git status --short
+            git commit -m "feat: rebuild premium board artwork and dual-country atlas"
+            COMMIT_STATUS=$?
+            echo "commit_status=$COMMIT_STATUS"
+            git rev-parse HEAD
+            git rev-parse 'HEAD^{tree}'
+            git push origin HEAD:agent/board-artwork-atlas-rework
+            PUSH_STATUS=$?
+            echo "push_status=$PUSH_STATUS"
+          } > "$LOG" 2>&1
+          cat "$LOG"
+          exit ${PUSH_STATUS:-1}
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-rework-diagnostics
+          path: |
+            ${{ runner.temp }}/board-rework.log
+            ${{ runner.temp }}/board-rework-publish.log
+          if-no-files-found: warn
+          retention-days: 3
