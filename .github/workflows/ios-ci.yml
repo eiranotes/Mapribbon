@@ -76,7 +76,7 @@ jobs:
           fi
           exit 0
 
-      - name: Capture redesigned UI screens
+      - name: Prepare screenshot simulator
         if: steps.build.outputs.status == '0'
         shell: bash
         run: |
@@ -86,61 +86,112 @@ jobs:
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
           OUT="$RUNNER_TEMP/mapribbon-ui-overhaul"
           mkdir -p "$OUT"
-
           xcrun simctl boot "$UDID" 2>/dev/null || true
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl ui "$UDID" appearance light || true
           xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState discharging --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
           xcrun simctl install "$UDID" "$APP_PATH"
           xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
+          {
+            echo "UDID=$UDID"
+            echo "BUNDLE_ID=$BUNDLE_ID"
+            echo "OUT=$OUT"
+          } > "$RUNNER_TEMP/screenshot.env"
+          cat > "$RUNNER_TEMP/capture-screen.sh" <<'SH'
+          #!/bin/bash
+          set -euo pipefail
+          source "$RUNNER_TEMP/screenshot.env"
+          FLAG="$1"
+          NAME="$2"
+          WAIT="${3:-3}"
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" -AppleLanguages "(ko)" -AppleLocale ko_KR
+          sleep "$WAIT"
+          xcrun simctl io "$UDID" screenshot "$OUT/$NAME.png"
+          SH
+          chmod +x "$RUNNER_TEMP/capture-screen.sh"
 
-          run_timed() {
-            local seconds="$1"
-            shift
-            python3 - "$seconds" "$@" <<'PY'
-          import subprocess
-          import sys
+      - name: Capture onboarding
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-onboarding onboarding"
 
-          timeout = float(sys.argv[1])
-          command = sys.argv[2:]
-          try:
-              result = subprocess.run(command, timeout=timeout)
-          except subprocess.TimeoutExpired:
-              print("Timed out after", timeout, "seconds:", " ".join(command), file=sys.stderr)
-              raise SystemExit(124)
-          raise SystemExit(result.returncode)
-          PY
-          }
+      - name: Capture home
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-home home"
 
-          capture() {
-            local flag="$1"
-            local name="$2"
-            local wait_seconds="${3:-3}"
-            echo "Capturing $name"
-            run_timed 8 xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-            run_timed 12 xcrun simctl launch "$UDID" "$BUNDLE_ID" "$flag" -AppleLanguages "(ko)" -AppleLocale ko_KR
-            sleep "$wait_seconds"
-            run_timed 12 xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
-          }
+      - name: Capture library
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-library library"
 
-          capture --screenshot-onboarding onboarding
-          capture --screenshot-home home
-          capture --screenshot-library library
-          capture --screenshot-atlas atlas-korea 6
-          capture --screenshot-atlas-japan atlas-japan 6
-          capture --screenshot-settings settings
-          capture --screenshot-paywall paywall
-          capture --screenshot-generation generation
-          capture --screenshot-board-editor board-editor
-          capture --screenshot-board-canvas board-poster
+      - name: Capture Korea atlas
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-atlas atlas-korea 6"
 
+      - name: Capture Japan atlas
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-atlas-japan atlas-japan 6"
+
+      - name: Capture settings
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-settings settings"
+
+      - name: Capture paywall
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-paywall paywall"
+
+      - name: Capture generation
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-generation generation"
+
+      - name: Capture editor
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-editor board-editor"
+
+      - name: Capture board poster
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-canvas board-poster"
+
+      - name: Validate screenshot matrix
+        id: screenshots
+        if: always()
+        shell: bash
+        run: |
+          OUT="$RUNNER_TEMP/mapribbon-ui-overhaul"
+          COUNT="$(find "$OUT" -maxdepth 1 -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
+          echo "Captured $COUNT of 10 expected screenshots"
+          if [ "$COUNT" -eq 10 ]; then
+            STATUS=0
+          else
+            STATUS=1
+          fi
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
           {
             echo "device=${{ steps.simulator.outputs.name }}"
             echo "runtime=${{ steps.simulator.outputs.runtime }}"
-            echo "bundle_id=$BUNDLE_ID"
             echo "commit=$GITHUB_SHA"
+            echo "screenshot_count=$COUNT"
           } > "$OUT/metadata.txt"
-          ls -lh "$OUT"
+          ls -lh "$OUT" || true
 
       - name: Upload UI screenshots
         if: always()
@@ -187,6 +238,6 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Fail when build or tests fail
-        if: steps.build.outputs.status != '0' || steps.xcode.outputs.status != '0'
+      - name: Fail when validation fails
+        if: steps.build.outputs.status != '0' || steps.xcode.outputs.status != '0' || steps.screenshots.outputs.status != '0'
         run: exit 1
