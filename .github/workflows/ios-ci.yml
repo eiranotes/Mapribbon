@@ -23,51 +23,40 @@ jobs:
           show-progress: false
 
       - name: Apply reviewed source changes
-        id: patch
         shell: bash
         run: |
-          set +e
-          LOG="$RUNNER_TEMP/pr11-patch.log"
-          (
-            set -euo pipefail
-            ls -l Scripts/apply_pr11_full_review.part*
-            sha256sum Scripts/apply_pr11_full_review.part*
-            echo "fec0e69ae61d38dce89dcdc7e0cb477fde1cf6274691a53ec263eab2f70a7eaa  Scripts/apply_pr11_full_review.part00" | sha256sum -c -
-            echo "dfdcd4aa69fcc63815f1a01f8607121bde2a108c52271e9178d66f0cb4b771f6  Scripts/apply_pr11_full_review.part01" | sha256sum -c -
-            echo "fe1a725064bedde221f8935d720f4d0ba5c86db08594361897dfbff58ab7a72b  Scripts/apply_pr11_full_review.part02" | sha256sum -c -
-            echo "03593b675f6f6f5e919b6c955691fe5e9481ff4d1afa0018409adfc179bcf2ea  Scripts/apply_pr11_full_review.part03" | sha256sum -c -
-            echo "79d52e68a967f1b89ac448a3204d1710b36111f2a1ae0b7a23d49de19d7417f5  Scripts/apply_pr11_full_review.part04" | sha256sum -c -
-            echo "9a5328d8c47d565804e25d1c33d70411b053c9cb9664e47456cebc4bc1ee032a  Scripts/apply_pr11_full_review.part05" | sha256sum -c -
-            echo "206aff4a33931d255475f25fdfc8970d0c3996bc661380ba425fbb5a5f1d35b1  Scripts/apply_pr11_full_review.part06" | sha256sum -c -
-            cat Scripts/apply_pr11_full_review.part* > "$RUNNER_TEMP/pr11-patch.b64"
-            echo "87bd06407371fc16f5e6969a75514f6347ee9a3d1b9cd3f5c926819c42eeccfa  $RUNNER_TEMP/pr11-patch.b64" | sha256sum -c -
-            base64 --decode "$RUNNER_TEMP/pr11-patch.b64" > "$RUNNER_TEMP/pr11-patch.gz"
-            gzip -t "$RUNNER_TEMP/pr11-patch.gz"
-            gzip -dc "$RUNNER_TEMP/pr11-patch.gz" > Scripts/apply_pr11_full_review.py
-            python3 Scripts/apply_pr11_full_review.py
-          ) > "$LOG" 2>&1
-          STATUS=$?
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-          cat "$LOG"
-          if [ "$STATUS" -eq 0 ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git diff --cached --stat
-            git commit -m "fix: complete board quality review follow-ups"
-            git push origin "HEAD:${GITHUB_HEAD_REF}"
-          fi
-          exit 0
+          set -euo pipefail
+          echo "87518771161ea85499add6dd36a99f73b56de84fa01cae5981063fabb3cbdf4c  Scripts/apply_pr11_full_review.part03a" | sha256sum -c -
+          echo "417f7b667a39720970c5d52140ba3b253ab310f0997ff2cd3357f705039a300e  Scripts/apply_pr11_full_review.part03b" | sha256sum -c -
+          echo "fa6fc97a012e5e38e9b92b82d5274508efc1e6e591d42bb76bf4f2c48dfa0192  Scripts/apply_pr11_full_review.part03c" | sha256sum -c -
+          echo "6a52404a57fb36987895d2a7f7eec456a6abed035257e130752c7ce9d6350086  Scripts/apply_pr11_full_review.part03d" | sha256sum -c -
+          echo "bc2b80b57ff1c4f747168121afb0916e7196ae36da94d86ffad6717193f79b32  Scripts/apply_pr11_full_review.part03e" | sha256sum -c -
+          echo "498b736910145d1528c472d9e9e2986b7d07e596f9d9761d483dfabf1d5958a8  Scripts/apply_pr11_full_review.part03f" | sha256sum -c -
+          echo "98f5aaaa915319e48b998b18a26dfb0f029d050fe1e2ba59faa573f3eefbfd9b  Scripts/apply_pr11_full_review.part03g" | sha256sum -c -
+          cat \
+            Scripts/apply_pr11_full_review.part00 \
+            Scripts/apply_pr11_full_review.part01 \
+            Scripts/apply_pr11_full_review.part02 \
+            Scripts/apply_pr11_full_review.part03a \
+            Scripts/apply_pr11_full_review.part03b \
+            Scripts/apply_pr11_full_review.part03c \
+            Scripts/apply_pr11_full_review.part03d \
+            Scripts/apply_pr11_full_review.part03e \
+            Scripts/apply_pr11_full_review.part03f \
+            Scripts/apply_pr11_full_review.part03g \
+            Scripts/apply_pr11_full_review.part04 \
+            Scripts/apply_pr11_full_review.part05 \
+            Scripts/apply_pr11_full_review.part06 \
+            > "$RUNNER_TEMP/pr11-patch.b64"
+          echo "87bd06407371fc16f5e6969a75514f6347ee9a3d1b9cd3f5c926819c42eeccfa  $RUNNER_TEMP/pr11-patch.b64" | sha256sum -c -
+          base64 --decode "$RUNNER_TEMP/pr11-patch.b64" > "$RUNNER_TEMP/pr11-patch.gz"
+          gzip -t "$RUNNER_TEMP/pr11-patch.gz"
+          gzip -dc "$RUNNER_TEMP/pr11-patch.gz" > Scripts/apply_pr11_full_review.py
+          python3 Scripts/apply_pr11_full_review.py
 
-      - name: Upload patch diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr11-chunk-hash-diagnostics
-          path: ${{ runner.temp }}/pr11-patch.log
-          retention-days: 2
-          if-no-files-found: error
-
-      - name: Fail when patch application fails
-        if: steps.patch.outputs.status != '0'
-        run: exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "fix: complete board quality review follow-ups"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
