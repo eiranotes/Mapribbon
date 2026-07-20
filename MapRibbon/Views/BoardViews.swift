@@ -119,6 +119,7 @@ struct BoardEditorView: View {
     @State private var showingPaywall = false
     @State private var showingTitleEditor = false
     @State private var showingTemplatePicker = false
+    @State private var showingThreadColorPicker = false
     @State private var showingAddMenu = false
     @State private var showingCloseConfirmation = false
     @State private var exportedImage: UIImage?
@@ -168,6 +169,11 @@ struct BoardEditorView: View {
                     } label: {
                         Label("템플릿 변경", systemImage: "square.stack.3d.up")
                     }
+                    Button {
+                        showingThreadColorPicker = true
+                    } label: {
+                        Label("실 색상", systemImage: "paintpalette.fill")
+                    }
 
                     Divider()
 
@@ -199,6 +205,11 @@ struct BoardEditorView: View {
         .sheet(isPresented: $showingTemplatePicker) {
             TemplatePickerSheet(draft: draft)
                 .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingThreadColorPicker) {
+            ThreadColorPickerSheet(draft: draft)
+                .presentationDetents([.height(270)])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingExport) {
@@ -236,6 +247,7 @@ struct BoardEditorView: View {
         .confirmationDialog("보드에 추가", isPresented: $showingAddMenu, titleVisibility: .visible) {
             Button("사진 선택") { showingPlaces = true }
             Button("장소 편집") { showingPlaces = true }
+            Button("실 색상 선택") { showingThreadColorPicker = true }
             Button("제목 메모 편집") { showingTitleEditor = true }
             Button("취소", role: .cancel) {}
         }
@@ -251,6 +263,7 @@ struct BoardEditorView: View {
         }
         .onChange(of: draft.title) { _, _ in hasUnsavedChanges = true }
         .onChange(of: draft.template) { _, _ in hasUnsavedChanges = true }
+        .onChange(of: draft.threadColor) { _, _ in hasUnsavedChanges = true }
         .onChange(of: draft.places) { _, _ in hasUnsavedChanges = true }
     }
 
@@ -260,8 +273,8 @@ struct BoardEditorView: View {
                 showingPlaces = true
             }
 
-            BoardEditorToolButton(title: "장소 추가", symbol: "mappin.and.ellipse") {
-                showingPlaces = true
+            BoardEditorToolButton(title: "실 색상", symbol: "paintpalette.fill") {
+                showingThreadColorPicker = true
             }
 
             Button {
@@ -327,7 +340,7 @@ struct BoardEditorView: View {
     private func persist(_ image: UIImage) {
         guard let previewData = image.jpegData(compressionQuality: 0.88),
               let payloadData = try? JSONEncoder().encode(
-                BoardArchivePayload(date: draft.date, title: draft.title, places: draft.places, template: draft.template)
+                BoardArchivePayload(date: draft.date, title: draft.title, places: draft.places, template: draft.template, threadColor: draft.threadColor)
               ) else { return }
 
         let regions = Array(Set(draft.places.compactMap { RegionNormalizer.key(from: $0.administrativeArea) })).sorted()
@@ -415,6 +428,48 @@ private struct TemplatePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } }
             }
+        }
+    }
+}
+
+private struct ThreadColorPickerSheet: View {
+    @Bindable var draft: BoardDraft
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 14) {
+                ForEach(BoardThreadColor.allCases) { color in
+                    Button {
+                        draft.threadColor = color
+                    } label: {
+                        VStack(spacing: 9) {
+                            ZStack {
+                                Circle().fill(Color(hex: color.primaryHex)).frame(width: 48, height: 48)
+                                    .shadow(color: .black.opacity(0.14), radius: 4, y: 2)
+                                if draft.threadColor == color {
+                                    Image(systemName: "checkmark").font(.system(size: 16, weight: .bold)).foregroundStyle(.white)
+                                }
+                            }
+                            Text(color.title).font(.caption.weight(.semibold))
+                                .foregroundStyle(draft.threadColor == color ? MRColor.accent : MRColor.primaryText)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .background(draft.threadColor == color ? MRColor.accentSoft : MRColor.elevatedSurface)
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(draft.threadColor == color ? MRColor.accent : MRColor.border.opacity(0.5), lineWidth: draft.threadColor == color ? 1.4 : 0.7)
+                        }
+                    }
+                    .buttonStyle(MRPressableStyle())
+                    .accessibilityLabel("실 색상 \(color.title)")
+                    .accessibilityAddTraits(draft.threadColor == color ? .isSelected : [])
+                }
+            }
+            .padding(20).background(MRColor.background)
+            .navigationTitle("실 색상").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("완료") { dismiss() } } }
         }
     }
 }
@@ -709,8 +764,8 @@ struct BoardCanvasView: View {
                 .overlay { RoundedRectangle(cornerRadius: size.width * 0.028).stroke(.black.opacity(0.16), lineWidth: max(1, size.width * 0.002)) }
 
             paperMap(in: mapRect)
-            routeLayer(anchors: anchors, width: mapRect.width)
             photoCards(places: places, placements: placements, in: mapRect)
+            routeLayer(anchors: anchors, width: mapRect.width)
             pinLayer(anchors: anchors, width: mapRect.width)
             titleNote(in: mapRect)
 
@@ -727,7 +782,8 @@ struct BoardCanvasView: View {
         ZStack {
             Image(uiImage: model.mapImage)
                 .resizable()
-                .scaledToFill()
+                .scaledToFit()
+                .background(Color(hex: 0xE9E2D4))
                 .saturation(0.38)
                 .contrast(0.92)
                 .brightness(0.055)
@@ -746,7 +802,9 @@ struct BoardCanvasView: View {
     private func routeLayer(anchors: [CGPoint], width: CGFloat) -> some View {
         Canvas { context, _ in
             guard anchors.count > 1 else { return }
-            let ropeWidth = max(3.4, width * 0.0072)
+            let ropeWidth = max(2.5, width * 0.0054)
+            let threadColor = Color(hex: model.threadColor.primaryHex)
+            let threadHighlight = Color(hex: model.threadColor.highlightHex)
             for index in 0..<(anchors.count - 1) {
                 let start = anchors[index]
                 let end = anchors[index + 1]
@@ -757,9 +815,9 @@ struct BoardCanvasView: View {
                 var path = Path()
                 path.move(to: start)
                 path.addCurve(to: end, control1: control1, control2: control2)
-                context.stroke(path, with: .color(.black.opacity(0.22)), style: StrokeStyle(lineWidth: ropeWidth * 1.55, lineCap: .round, lineJoin: .round))
-                context.stroke(path, with: .color(Color(hex: 0xA52D24)), style: StrokeStyle(lineWidth: ropeWidth, lineCap: .round, lineJoin: .round))
-                context.stroke(path, with: .color(Color(hex: 0xE27867).opacity(0.55)), style: StrokeStyle(lineWidth: max(0.7, ropeWidth * 0.18), lineCap: .round))
+                context.stroke(path, with: .color(.black.opacity(0.24)), style: StrokeStyle(lineWidth: ropeWidth * 1.42, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(threadColor), style: StrokeStyle(lineWidth: ropeWidth, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(threadHighlight.opacity(0.62)), style: StrokeStyle(lineWidth: max(0.55, ropeWidth * 0.16), lineCap: .round))
             }
         }
         .allowsHitTesting(false)

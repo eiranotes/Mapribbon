@@ -1,0 +1,40 @@
+name: Apply map canvas refinement
+
+on:
+  push:
+    branches:
+      - agent/thread-overlay-wider-map
+    paths:
+      - scripts/refine_map_canvas.py
+      - .github/workflows/apply-map-canvas-refinement.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: macos-15
+    timeout-minutes: 12
+    steps:
+      - name: Checkout refinement branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/thread-overlay-wider-map
+
+      - name: Apply map and screenshot refinements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/refine_map_canvas.py
+          python3 scripts/refine_map_canvas.py
+
+      - name: Commit source changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MapRibbon/Views/BoardViews.swift MapRibbon/App/MapRibbonApp.swift .github/workflows/ios-ci.yml
+          git diff --cached --check
+          git commit -m "fix: expand map canvas and capture thread palette"
+          git push origin HEAD:agent/thread-overlay-wider-map

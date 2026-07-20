@@ -38,6 +38,12 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertGreaterThan(story[0].widthFactor, poster[0].widthFactor)
     }
 
+    func testThreadPaletteProvidesDistinctRenderColors() {
+        XCTAssertEqual(BoardThreadColor.allCases.count, 6)
+        XCTAssertEqual(Set(BoardThreadColor.allCases.map(\.primaryHex)).count, 6)
+        XCTAssertTrue(BoardThreadColor.allCases.allSatisfy { $0.primaryHex != $0.highlightHex })
+    }
+
     private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {
         PhotoAssetSnapshot(id: id, creationDate: date, latitude: latitude, longitude: longitude, pixelWidth: 4_032, pixelHeight: 3_024, isFavorite: false, isScreenshot: false)
     }
