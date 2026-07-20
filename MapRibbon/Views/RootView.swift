@@ -24,6 +24,7 @@ struct RootView: View {
                 OnboardingView { hasCompletedOnboarding = true }
             }
         }
+        .tint(MRColor.accent)
         .background(MRColor.background.ignoresSafeArea())
     }
 }
@@ -36,15 +37,17 @@ struct MainTabView: View {
         TabView(selection: $router.selectedTab) {
             NavigationStack { BoardsHomeView() }
                 .tag(MRMainTab.boards)
-                .tabItem { Label("보드", systemImage: "rectangle.stack") }
+                .tabItem { Label("보드", systemImage: "point.topleft.down.to.point.bottomright.curvepath") }
 
             NavigationStack { BoardLibraryView() }
                 .tag(MRMainTab.library)
-                .tabItem { Label("보관함", systemImage: "books.vertical") }
+                .tabItem { Label("보관함", systemImage: "rectangle.stack") }
 
             NavigationStack { AtlasView() }
                 .tag(MRMainTab.atlas)
                 .tabItem { Label("아틀라스", systemImage: "map") }
         }
+        .toolbarBackground(.regularMaterial, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
     }
 }
