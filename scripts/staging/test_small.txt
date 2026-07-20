@@ -1,0 +1,5 @@
+ATLAS_PREFIX = r'''enum AtlasCountry: String, CaseIterable, Identifiable {
+    case korea
+    case japan
+}
+'''
