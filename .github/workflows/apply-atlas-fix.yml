@@ -1,0 +1,36 @@
+name: Apply atlas silhouette fix
+
+on:
+  push:
+    branches:
+      - agent/board-artwork-atlas-rework
+    paths:
+      - scripts/fix_japan_atlas.py
+      - .github/workflows/apply-atlas-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - name: Checkout task branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/board-artwork-atlas-rework
+
+      - name: Patch bounded Japan silhouette
+        run: python3 scripts/fix_japan_atlas.py
+
+      - name: Commit and push source fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add MapRibbon/Views/AtlasSettingsViews.swift scripts/fix_japan_atlas.py
+          git commit -m "fix: keep Japan atlas silhouette within map bounds"
+          git push origin HEAD:agent/board-artwork-atlas-rework
