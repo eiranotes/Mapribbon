@@ -21,7 +21,7 @@ def write(path: str, content: str) -> None:
 
 def replace_once(path: str, pattern: str, replacement: str, flags: int = re.S) -> None:
     source = read(path)
-    updated, count = re.subn(pattern, replacement, source, count=1, flags=flags)
+    updated, count = re.subn(pattern, lambda _: replacement, source, count=1, flags=flags)
     if count != 1:
         raise RuntimeError(f"Expected one replacement in {path}, got {count}: {pattern[:80]}")
     write(path, updated)
