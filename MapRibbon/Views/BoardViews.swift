@@ -662,22 +662,8 @@ struct PlaceEditorView: View {
 
 enum BoardRouteLayout {
     static func edgePairs(for count: Int) -> [(Int, Int)] {
-        switch count {
-        case 0...1:
-            return []
-        case 2:
-            return [(0, 1)]
-        case 3:
-            return [(0, 1), (0, 2)]
-        case 4:
-            return [(0, 1), (0, 2), (2, 3)]
-        default:
-            var edges = [(0, 1), (0, 2), (2, 3), (1, 4), (3, 4)]
-            if count > 5 {
-                edges.append(contentsOf: (5..<count).map { ($0 - 1, $0) })
-            }
-            return edges
-        }
+        guard count > 1 else { return [] }
+        return (0..<(count - 1)).map { ($0, $0 + 1) }
     }
 }
 
@@ -702,466 +688,302 @@ struct BoardCanvasView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            switch model.template {
-            case .ribbon: ribbon(in: proxy.size)
-            case .editorial: editorial(in: proxy.size)
-            case .postcard: postcard(in: proxy.size)
-            case .scrapbook: scrapbook(in: proxy.size)
-            }
+            premiumBoard(in: proxy.size)
         }
-        .background(MRColor.paper)
+        .background(MRColor.cork)
         .clipped()
     }
 
-    private func ribbon(in size: CGSize) -> some View {
-        let boardRect = CGRect(origin: .zero, size: size)
-        let mapRect = boardRect.insetBy(dx: size.width * 0.031, dy: size.width * 0.031)
+    private func premiumBoard(in size: CGSize) -> some View {
+        let outer = CGRect(origin: .zero, size: size)
+        let boardInset = max(8, size.width * 0.028)
+        let mapRect = outer.insetBy(dx: boardInset, dy: boardInset)
+        let places = model.visiblePlaces.sorted { $0.startDate < $1.startDate }
+        let placements = BoardLayoutEngine.cardPlacements(for: places.count, aspectRatio: size.width / max(1, size.height))
+        let anchors = BoardLayoutEngine.anchorPoints(placements: placements, in: mapRect)
 
         return ZStack {
-            RoundedRectangle(cornerRadius: size.width * 0.026, style: .continuous)
-                .fill(Color(hex: 0xA66F3F))
-                .overlay {
-                    CorkBoardTexture()
-                        .clipShape(RoundedRectangle(cornerRadius: size.width * 0.026, style: .continuous))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: size.width * 0.026, style: .continuous)
-                        .stroke(Color.black.opacity(0.10), lineWidth: max(1, size.width * 0.002))
-                }
-                .shadow(color: .black.opacity(0.20), radius: size.width * 0.020, y: size.width * 0.012)
+            RoundedRectangle(cornerRadius: size.width * 0.028, style: .continuous)
+                .fill(Color(hex: model.template == .scrapbook ? 0xA87542 : 0x9B673D))
+                .overlay { PremiumCorkTexture().clipShape(RoundedRectangle(cornerRadius: size.width * 0.028, style: .continuous)) }
+                .overlay { RoundedRectangle(cornerRadius: size.width * 0.028).stroke(.black.opacity(0.16), lineWidth: max(1, size.width * 0.002)) }
 
-            mapPaper(in: mapRect)
-            ropeLayer(in: mapRect, scale: 0.215)
-            photoLayer(in: mapRect, scale: 0.215, labeled: true)
-            pinLayer(in: mapRect, scale: 0.215)
+            paperMap(in: mapRect)
+            routeLayer(anchors: anchors, width: mapRect.width)
+            photoCards(places: places, placements: placements, in: mapRect)
+            pinLayer(anchors: anchors, width: mapRect.width)
             titleNote(in: mapRect)
-            footer(in: mapRect, dark: true)
-        }
-    }
 
-    private func editorial(in size: CGSize) -> some View {
-        let mapRect = CGRect(x: 0, y: 0, width: size.width, height: size.height * 0.70)
-        return ZStack(alignment: .top) {
-            MRColor.paper
-            VStack(spacing: 0) {
-                ZStack {
-                    mapPaper(in: mapRect)
-                    ropeLayer(in: mapRect, scale: 0.17)
-                    pinLayer(in: mapRect, scale: 0.17)
-                }
-                .frame(height: mapRect.height)
-                HStack(spacing: size.width * 0.014) {
-                    ForEach(Array(model.visiblePlaces.prefix(4))) { place in
-                        if let image = model.photoImages[place.representativeAssetIdentifier] {
-                            Image(uiImage: image).resizable().scaledToFill().frame(maxWidth: .infinity).clipped()
-                        }
-                    }
-                }
-                .frame(height: size.height * 0.22)
-                .padding(size.width * 0.04)
+            if watermark {
+                Text("Made with MapRibbon")
+                    .font(.system(size: mapRect.width * 0.018, weight: .semibold))
+                    .foregroundStyle(MRColor.ink.opacity(0.42))
+                    .position(x: mapRect.maxX - mapRect.width * 0.13, y: mapRect.maxY - mapRect.height * 0.022)
             }
-            genericHeader(size, dark: false)
-            genericFooter(size, dark: false)
         }
     }
 
-    private func postcard(in size: CGSize) -> some View {
-        let mapRect = CGRect(x: size.width * 0.07, y: size.width * 0.07, width: size.width * 0.86, height: size.height - size.width * 0.14)
-        return ZStack {
-            MRColor.paperBright
-            mapPaper(in: mapRect)
-            ropeLayer(in: mapRect, scale: 0.18)
-            photoLayer(in: mapRect, scale: 0.18, labeled: false)
-            pinLayer(in: mapRect, scale: 0.18)
-            genericHeader(size, dark: false)
-            genericFooter(size, dark: false)
-        }
-    }
-
-    private func scrapbook(in size: CGSize) -> some View {
-        let boardRect = CGRect(x: size.width * 0.025, y: size.height * 0.018, width: size.width * 0.95, height: size.height * 0.965)
-        let mapRect = boardRect.insetBy(dx: size.width * 0.04, dy: size.width * 0.04)
-        return ZStack {
-            Color(hex: 0xA97845)
-            CorkBoardTexture()
-            mapPaper(in: mapRect)
-            ropeLayer(in: mapRect, scale: 0.215)
-            photoLayer(in: mapRect, scale: 0.215, labeled: true)
-            pinLayer(in: mapRect, scale: 0.215)
-            titleNote(in: mapRect)
-            ForEach(0..<3, id: \.self) { index in
-                Rectangle()
-                    .fill(Color(hex: 0xD9C29D).opacity(0.78))
-                    .frame(width: size.width * 0.17, height: size.height * 0.022)
-                    .rotationEffect(.degrees(index == 1 ? -12 : 9))
-                    .position(x: size.width * [0.20, 0.80, 0.57][index], y: size.height * [0.20, 0.46, 0.84][index])
-            }
-            footer(in: mapRect, dark: true)
-        }
-    }
-
-    private func mapPaper(in rect: CGRect) -> some View {
+    private func paperMap(in rect: CGRect) -> some View {
         ZStack {
             Image(uiImage: model.mapImage)
                 .resizable()
                 .scaledToFill()
+                .saturation(0.38)
+                .contrast(0.92)
+                .brightness(0.055)
                 .frame(width: rect.width, height: rect.height)
                 .clipped()
-            Color(hex: 0xF4EFE5).opacity(0.18)
-            PaperGrain().opacity(0.72)
+            Color(hex: 0xF2EBDD).opacity(0.38)
+            PremiumPaperGrain().opacity(0.68)
         }
         .frame(width: rect.width, height: rect.height)
         .clipShape(RoundedRectangle(cornerRadius: rect.width * 0.012, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: rect.width * 0.012)
-                .stroke(Color.black.opacity(0.10), lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.16), radius: rect.width * 0.012, y: rect.width * 0.008)
+        .overlay { RoundedRectangle(cornerRadius: rect.width * 0.012).stroke(Color.black.opacity(0.13), lineWidth: max(0.8, rect.width * 0.0015)) }
+        .shadow(color: .black.opacity(0.18), radius: rect.width * 0.014, y: rect.width * 0.009)
         .position(x: rect.midX, y: rect.midY)
     }
 
-    private func ropeLayer(in rect: CGRect, scale: CGFloat) -> some View {
+    private func routeLayer(anchors: [CGPoint], width: CGFloat) -> some View {
         Canvas { context, _ in
-            let points = routePoints(in: rect, scale: scale)
-            let thickness = max(4.5, rect.width * 0.0105)
-            let rope = context.resolve(Image("RouteRopeRed"))
-            let tileWidth = thickness * 1.42
+            guard anchors.count > 1 else { return }
+            let ropeWidth = max(3.4, width * 0.0072)
+            for index in 0..<(anchors.count - 1) {
+                let start = anchors[index]
+                let end = anchors[index + 1]
+                let dx = end.x - start.x
+                let bend = min(width * 0.055, abs(dx) * 0.18)
+                let control1 = CGPoint(x: start.x + dx * 0.34, y: start.y + (index.isMultiple(of: 2) ? bend : -bend))
+                let control2 = CGPoint(x: start.x + dx * 0.68, y: end.y + (index.isMultiple(of: 2) ? -bend : bend))
+                var path = Path()
+                path.move(to: start)
+                path.addCurve(to: end, control1: control1, control2: control2)
+                context.stroke(path, with: .color(.black.opacity(0.22)), style: StrokeStyle(lineWidth: ropeWidth * 1.55, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(Color(hex: 0xA52D24)), style: StrokeStyle(lineWidth: ropeWidth, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(Color(hex: 0xE27867).opacity(0.55)), style: StrokeStyle(lineWidth: max(0.7, ropeWidth * 0.18), lineCap: .round))
+            }
+        }
+        .allowsHitTesting(false)
+    }
 
-            for segment in routeSegments(from: points) {
-                let dx = segment.end.x - segment.start.x
-                let dy = segment.end.y - segment.start.y
-                let length = max(sqrt(dx * dx + dy * dy), thickness)
-                let angle = Angle(radians: Double(atan2(dy, dx)))
-                let midpoint = CGPoint(x: (segment.start.x + segment.end.x) * 0.5, y: (segment.start.y + segment.end.y) * 0.5)
-
-                context.drawLayer { layer in
-                    layer.translateBy(x: midpoint.x, y: midpoint.y)
-                    layer.rotate(by: angle)
-                    layer.addFilter(.shadow(color: .black.opacity(0.28), radius: thickness * 0.42, x: 0, y: thickness * 0.30))
-
-                    let capsuleRect = CGRect(
-                        x: -length * 0.5 - thickness * 0.30,
-                        y: -thickness * 0.5,
-                        width: length + thickness * 0.60,
-                        height: thickness
-                    )
-                    layer.clip(to: Capsule().path(in: capsuleRect))
-
-                    var x = capsuleRect.minX - 1
-                    while x < capsuleRect.maxX {
-                        layer.draw(rope, in: CGRect(x: x, y: capsuleRect.minY, width: tileWidth + 0.8, height: thickness))
-                        x += tileWidth - 0.4
-                    }
+    @ViewBuilder
+    private func photoCards(places: [BoardPlace], placements: [BoardCardPlacement], in rect: CGRect) -> some View {
+        ZStack {
+            ForEach(Array(places.enumerated()), id: \.element.id) { index, place in
+                if index < placements.count, let image = model.photoImages[place.representativeAssetIdentifier] {
+                    let placement = placements[index]
+                    PremiumBoardPhotoCard(place: place, image: image, width: rect.width * placement.widthFactor, variant: index)
+                        .rotationEffect(.degrees(placement.rotation))
+                        .position(x: rect.minX + rect.width * placement.center.x, y: rect.minY + rect.height * placement.center.y)
                 }
-
-                var highlight = Path()
-                highlight.move(to: segment.start)
-                highlight.addLine(to: segment.end)
-                context.stroke(
-                    highlight,
-                    with: .color(.white.opacity(0.10)),
-                    style: StrokeStyle(lineWidth: max(0.7, thickness * 0.09), lineCap: .round)
-                )
             }
         }
     }
 
-    private func pinLayer(in rect: CGRect, scale: CGFloat) -> some View {
-        let points = routePoints(in: rect, scale: scale)
-        let pinWidth = max(22, rect.width * 0.054)
-        let pinHeight = pinWidth * 1.60
+    private func pinLayer(anchors: [CGPoint], width: CGFloat) -> some View {
         let assets = ["RoutePinBlue", "RoutePinTeal", "RoutePinYellow", "RoutePinCream", "RoutePinRed", "RoutePinGreen"]
-
+        let pinWidth = max(20, width * 0.047)
         return ZStack {
-            ForEach(points.indices, id: \.self) { index in
+            ForEach(anchors.indices, id: \.self) { index in
                 Image(assets[index % assets.count])
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
-                    .frame(width: pinWidth, height: pinHeight)
-                    .shadow(color: .black.opacity(0.24), radius: pinWidth * 0.08, y: pinWidth * 0.06)
-                    .position(x: points[index].x, y: points[index].y - pinHeight * 0.31)
-            }
-        }
-    }
-
-    private func photoLayer(in rect: CGRect, scale: CGFloat, labeled: Bool) -> some View {
-        let positions = cardPositions(count: model.visiblePlaces.count)
-        return ZStack {
-            ForEach(Array(model.visiblePlaces.enumerated()), id: \.element.id) { index, place in
-                if index < positions.count, let image = model.photoImages[place.representativeAssetIdentifier] {
-                    BoardPhotoCard(
-                        place: place,
-                        image: image,
-                        size: rect.size,
-                        scale: scale,
-                        labeled: labeled,
-                        variant: index
-                    )
-                    .rotationEffect(.degrees(cardRotationDegrees(for: index)))
-                    .position(x: rect.minX + positions[index].x * rect.width, y: rect.minY + positions[index].y * rect.height)
-                }
+                    .frame(width: pinWidth, height: pinWidth * 1.56)
+                    .shadow(color: .black.opacity(0.28), radius: pinWidth * 0.10, y: pinWidth * 0.08)
+                    .position(x: anchors[index].x, y: anchors[index].y - pinWidth * 0.47)
             }
         }
     }
 
     private func titleNote(in rect: CGRect) -> some View {
-        let width = rect.width * 0.40
+        let width = rect.width * 0.405
         return ZStack {
-            VStack(alignment: .leading, spacing: rect.height * 0.003) {
+            VStack(alignment: .leading, spacing: rect.height * 0.004) {
                 Text(model.date.mrBoardDate)
-                    .font(.system(size: rect.width * 0.025, weight: .medium))
-                    .foregroundStyle(MRColor.ink.opacity(0.68))
+                    .font(.system(size: rect.width * 0.024, weight: .medium, design: .serif))
+                    .foregroundStyle(MRColor.ink.opacity(0.66))
                 Text(model.title)
-                    .font(.system(size: rect.width * 0.052, weight: .bold))
+                    .font(.system(size: rect.width * 0.054, weight: .bold, design: .serif))
                     .foregroundStyle(MRColor.ink)
                     .lineLimit(2)
-                Text("사진으로 다시 엮은 하루")
-                    .font(.system(size: rect.width * 0.022, weight: .medium))
+                    .minimumScaleFactor(0.72)
+                Text("사진으로 다시 엮은 여름의 하루")
+                    .font(.system(size: rect.width * 0.0215, weight: .medium, design: .serif))
                     .foregroundStyle(MRColor.ink.opacity(0.58))
             }
+            .padding(.horizontal, rect.width * 0.026)
+            .padding(.vertical, rect.width * 0.022)
             .frame(width: width, alignment: .leading)
-            .padding(rect.width * 0.025)
-            .background(Color(hex: 0xFBF8F0))
-            .overlay(PaperGrain().opacity(0.55))
-            .rotationEffect(.degrees(-1.2))
-            .shadow(color: .black.opacity(0.16), radius: rect.width * 0.012, y: rect.width * 0.008)
-            .position(x: rect.minX + rect.width * 0.25, y: rect.minY + rect.height * 0.095)
+            .background(Color(hex: 0xFBF7ED))
+            .overlay(PremiumPaperGrain().opacity(0.55))
+            .overlay { Rectangle().stroke(Color.black.opacity(0.055), lineWidth: 0.7) }
+            .rotationEffect(.degrees(-1.0))
+            .shadow(color: .black.opacity(0.19), radius: rect.width * 0.014, y: rect.width * 0.010)
+            .position(x: rect.minX + rect.width * 0.245, y: rect.minY + rect.height * 0.095)
 
             Image("RoutePinCream")
                 .resizable()
                 .scaledToFit()
-                .frame(width: rect.width * 0.055, height: rect.width * 0.09)
-                .position(x: rect.minX + rect.width * 0.25, y: rect.minY + rect.height * 0.043)
+                .frame(width: rect.width * 0.046, height: rect.width * 0.074)
+                .position(x: rect.minX + rect.width * 0.245, y: rect.minY + rect.height * 0.044)
         }
-    }
-
-    private func genericHeader(_ size: CGSize, dark: Bool) -> some View {
-        VStack(alignment: .leading, spacing: size.height * 0.004) {
-            Text(model.date.mrBoardDate.uppercased())
-                .font(.system(size: size.width * 0.032, weight: .semibold))
-            Text(model.title)
-                .font(.system(size: size.width * 0.070, weight: .bold, design: model.template == .postcard ? .serif : .default))
-                .lineLimit(2)
-        }
-        .foregroundStyle(dark ? Color.black.opacity(0.82) : MRColor.ink)
-        .padding(.horizontal, size.width * 0.065)
-        .padding(.top, size.height * 0.05)
-        .frame(width: size.width, height: size.height, alignment: .topLeading)
-    }
-
-    private func genericFooter(_ size: CGSize, dark: Bool) -> some View {
-        VStack {
-            Spacer()
-            HStack {
-                Text("사진 \(model.photoCount)장 · 장소 \(model.visiblePlaces.count)곳")
-                Spacer()
-                if watermark { Text("Made with MapRibbon") }
-            }
-            .font(.system(size: size.width * 0.028, weight: .semibold))
-            .foregroundStyle(dark ? Color.black.opacity(0.58) : MRColor.ink.opacity(0.64))
-            .padding(.horizontal, size.width * 0.065)
-            .padding(.bottom, size.height * 0.035)
-        }
-    }
-
-    private func footer(in rect: CGRect, dark: Bool) -> some View {
-        HStack {
-            Text("사진 \(model.photoCount)장 · 장소 \(model.visiblePlaces.count)곳")
-            Spacer()
-            if watermark { Text("Made with MapRibbon") }
-        }
-        .font(.system(size: rect.width * 0.022, weight: .semibold))
-        .foregroundStyle(dark ? Color.black.opacity(0.56) : MRColor.ink.opacity(0.62))
-        .frame(width: rect.width * 0.88)
-        .position(x: rect.midX, y: rect.maxY - rect.height * 0.025)
-    }
-
-    private func routePoints(in rect: CGRect, scale: CGFloat) -> [CGPoint] {
-        switch model.template {
-        case .ribbon, .scrapbook:
-            return cardAnchorPoints(count: model.visiblePlaces.count, rect: rect, scale: scale)
-        case .editorial, .postcard:
-            return model.visiblePlaces.compactMap { place in
-                guard let point = model.normalizedPoints[place.id] else { return nil }
-                return CGPoint(x: rect.minX + point.x * rect.width, y: rect.minY + point.y * rect.height)
-            }
-        }
-    }
-
-    private func cardAnchorPoints(count: Int, rect: CGRect, scale: CGFloat) -> [CGPoint] {
-        let positions = cardPositions(count: count)
-        let cardHeight = rect.width * scale * 1.23
-        let topInset = cardHeight * 0.42
-        return positions.enumerated().map { index, position in
-            let center = CGPoint(x: rect.minX + position.x * rect.width, y: rect.minY + position.y * rect.height)
-            let angle = cardRotationDegrees(for: index) * Double.pi / 180
-            return CGPoint(x: center.x + CGFloat(sin(angle)) * topInset, y: center.y - CGFloat(cos(angle)) * topInset)
-        }
-    }
-
-    private func cardRotationDegrees(for index: Int) -> Double {
-        let values: [Double] = [-2, 3, -2, 2, 4, -2, 2, -3]
-        return values[index % values.count]
-    }
-
-    private func routeSegments(from points: [CGPoint]) -> [BoardRouteSegment] {
-        BoardRouteLayout.edgePairs(for: points.count).enumerated().compactMap { index, pair in
-            guard points.indices.contains(pair.0), points.indices.contains(pair.1) else { return nil }
-            return BoardRouteSegment(id: index, start: points[pair.0], end: points[pair.1])
-        }
-    }
-
-    private func cardPositions(count: Int) -> [CGPoint] {
-        let all = [
-            CGPoint(x: 0.245, y: 0.285), CGPoint(x: 0.760, y: 0.400),
-            CGPoint(x: 0.240, y: 0.565), CGPoint(x: 0.300, y: 0.820),
-            CGPoint(x: 0.740, y: 0.745), CGPoint(x: 0.215, y: 0.900),
-            CGPoint(x: 0.520, y: 0.500), CGPoint(x: 0.525, y: 0.845)
-        ]
-        return Array(all.prefix(max(0, min(count, all.count))))
     }
 }
 
-private struct BoardPhotoCard: View {
+struct BoardCardPlacement: Equatable {
+    let center: CGPoint
+    let widthFactor: CGFloat
+    let rotation: Double
+}
+
+enum BoardLayoutEngine {
+    static func cardPlacements(for count: Int, aspectRatio: CGFloat) -> [BoardCardPlacement] {
+        let isStory = aspectRatio < 0.64
+        let isFeed = aspectRatio >= 0.64 && aspectRatio < 0.77
+        let posterFive = [
+            BoardCardPlacement(center: CGPoint(x: 0.285, y: 0.315), widthFactor: 0.245, rotation: -2.2),
+            BoardCardPlacement(center: CGPoint(x: 0.755, y: 0.425), widthFactor: 0.245, rotation: 2.6),
+            BoardCardPlacement(center: CGPoint(x: 0.275, y: 0.585), widthFactor: 0.238, rotation: -2.0),
+            BoardCardPlacement(center: CGPoint(x: 0.315, y: 0.825), widthFactor: 0.245, rotation: 1.5),
+            BoardCardPlacement(center: CGPoint(x: 0.735, y: 0.755), widthFactor: 0.248, rotation: 3.0),
+        ]
+        let feedFive = [
+            BoardCardPlacement(center: CGPoint(x: 0.28, y: 0.31), widthFactor: 0.255, rotation: -2.0),
+            BoardCardPlacement(center: CGPoint(x: 0.75, y: 0.39), widthFactor: 0.25, rotation: 2.4),
+            BoardCardPlacement(center: CGPoint(x: 0.28, y: 0.58), widthFactor: 0.245, rotation: -1.6),
+            BoardCardPlacement(center: CGPoint(x: 0.32, y: 0.82), widthFactor: 0.25, rotation: 1.4),
+            BoardCardPlacement(center: CGPoint(x: 0.73, y: 0.73), widthFactor: 0.25, rotation: 2.8),
+        ]
+        let storyFive = [
+            BoardCardPlacement(center: CGPoint(x: 0.30, y: 0.27), widthFactor: 0.285, rotation: -2.0),
+            BoardCardPlacement(center: CGPoint(x: 0.72, y: 0.40), widthFactor: 0.28, rotation: 2.3),
+            BoardCardPlacement(center: CGPoint(x: 0.30, y: 0.55), widthFactor: 0.275, rotation: -1.5),
+            BoardCardPlacement(center: CGPoint(x: 0.31, y: 0.76), widthFactor: 0.28, rotation: 1.2),
+            BoardCardPlacement(center: CGPoint(x: 0.70, y: 0.84), widthFactor: 0.285, rotation: 2.5),
+        ]
+        let base = isStory ? storyFive : (isFeed ? feedFive : posterFive)
+        if count <= 0 { return [] }
+        if count == 1 { return [BoardCardPlacement(center: CGPoint(x: 0.52, y: 0.56), widthFactor: isStory ? 0.46 : 0.40, rotation: -1.2)] }
+        if count == 2 { return [base[0], BoardCardPlacement(center: CGPoint(x: 0.70, y: 0.66), widthFactor: base[1].widthFactor * 1.08, rotation: 2.2)] }
+        if count == 3 { return [base[0], base[1], BoardCardPlacement(center: CGPoint(x: 0.38, y: 0.74), widthFactor: base[2].widthFactor * 1.04, rotation: -1.5)] }
+        if count == 4 { return [base[0], base[1], base[2], BoardCardPlacement(center: CGPoint(x: 0.70, y: 0.76), widthFactor: base[3].widthFactor, rotation: 2.0)] }
+        var result = base
+        let extras = [
+            BoardCardPlacement(center: CGPoint(x: 0.52, y: 0.52), widthFactor: 0.20, rotation: -1.0),
+            BoardCardPlacement(center: CGPoint(x: 0.54, y: 0.90), widthFactor: 0.20, rotation: 1.8),
+            BoardCardPlacement(center: CGPoint(x: 0.82, y: 0.60), widthFactor: 0.19, rotation: -2.2),
+        ]
+        if count > result.count { result.append(contentsOf: extras.prefix(count - result.count)) }
+        return Array(result.prefix(min(count, 8)))
+    }
+
+    static func anchorPoints(placements: [BoardCardPlacement], in rect: CGRect) -> [CGPoint] {
+        placements.map { placement in
+            let width = rect.width * placement.widthFactor
+            let height = width * 1.22
+            let inset = height * 0.42
+            let angle = placement.rotation * Double.pi / 180
+            let center = CGPoint(x: rect.minX + rect.width * placement.center.x, y: rect.minY + rect.height * placement.center.y)
+            return CGPoint(x: center.x + CGFloat(sin(angle)) * inset, y: center.y - CGFloat(cos(angle)) * inset)
+        }
+    }
+}
+
+private struct PremiumBoardPhotoCard: View {
     let place: BoardPlace
     let image: UIImage
-    let size: CGSize
-    let scale: CGFloat
-    let labeled: Bool
+    let width: CGFloat
     let variant: Int
 
     var body: some View {
-        let width = size.width * scale
-        let height = width * (labeled ? 1.23 : 1.04)
-        let xDirections: [CGFloat] = [1, -1, 1, -1, 1]
-        let direction = xDirections[variant % xDirections.count]
-        let rearAngles: [Double] = [2.0, -2.4, 1.5, -1.8, 2.6]
-        let rearAngle = rearAngles[variant % rearAngles.count]
-
+        let height = width * 1.22
+        let direction: CGFloat = variant.isMultiple(of: 2) ? 1 : -1
+        let rearAngle = [2.0, -2.4, 1.6, -1.8, 2.4][variant % 5]
         ZStack {
             Rectangle()
-                .fill(Color(hex: 0xF8F6F0))
+                .fill(Color(hex: 0xF2EEE5))
                 .frame(width: width, height: height)
                 .rotationEffect(.degrees(rearAngle))
-                .offset(x: direction * width * 0.070, y: height * 0.045)
-
+                .offset(x: direction * width * 0.075, y: height * 0.052)
             Rectangle()
-                .fill(Color.white.opacity(0.96))
+                .fill(Color(hex: 0xFAF8F2))
                 .frame(width: width, height: height)
-                .rotationEffect(.degrees(-rearAngle * 0.45))
-                .offset(x: -direction * width * 0.035, y: height * 0.025)
-
+                .rotationEffect(.degrees(-rearAngle * 0.55))
+                .offset(x: -direction * width * 0.035, y: height * 0.028)
             VStack(spacing: 0) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(width: width * 0.87, height: labeled ? height * 0.67 : height * 0.80)
+                    .frame(width: width * 0.88, height: height * 0.70)
                     .clipped()
-
-                if labeled {
-                    VStack(alignment: .leading, spacing: max(1, width * 0.010)) {
-                        HStack(alignment: .firstTextBaseline, spacing: 3) {
-                            Text(place.title)
-                                .font(.system(size: width * 0.072, weight: .bold))
-                                .lineLimit(1)
-                            Spacer(minLength: 2)
-                            Text("\(place.photoCount)장")
-                                .font(.system(size: width * 0.057, weight: .bold))
-                                .foregroundStyle(MRColor.accent)
-                        }
-
-                        Text(place.subtitle ?? place.startDate.formatted(date: .omitted, time: .shortened))
-                            .font(.system(size: width * 0.049, weight: .medium))
-                            .foregroundStyle(MRColor.ink.opacity(0.66))
+                VStack(alignment: .leading, spacing: max(1, width * 0.012)) {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(place.title)
+                            .font(.system(size: width * 0.071, weight: .bold))
+                            .foregroundStyle(MRColor.ink)
                             .lineLimit(1)
+                            .minimumScaleFactor(0.72)
+                        Spacer(minLength: 2)
+                        Text("\(place.photoCount)장")
+                            .font(.system(size: width * 0.052, weight: .bold))
+                            .foregroundStyle(MRColor.accent)
                     }
-                    .padding(.horizontal, width * 0.055)
-                    .padding(.top, width * 0.040)
-                    .padding(.bottom, width * 0.025)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .background(Color(hex: 0xFBFAF6))
-                } else {
-                    Rectangle().fill(.white).frame(maxHeight: .infinity)
+                    Text(place.subtitle ?? place.startDate.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: width * 0.046, weight: .medium))
+                        .foregroundStyle(MRColor.ink.opacity(0.68))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.70)
                 }
+                .padding(.horizontal, width * 0.055)
+                .padding(.top, width * 0.038)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .background(Color(hex: 0xFBF9F3))
             }
             .padding(width * 0.052)
-            .background(Color(hex: 0xFCFBF7))
             .frame(width: width, height: height)
-            .overlay {
-                Rectangle().stroke(Color.black.opacity(0.045), lineWidth: max(0.5, width * 0.003))
-            }
+            .background(Color(hex: 0xFEFDF9))
+            .overlay { Rectangle().stroke(Color.black.opacity(0.055), lineWidth: max(0.5, width * 0.003)) }
         }
-        .shadow(color: .black.opacity(0.22), radius: size.width * 0.013, y: size.width * 0.010)
+        .shadow(color: .black.opacity(0.24), radius: width * 0.075, y: width * 0.050)
     }
 }
 
-private struct CorkBoardTexture: View {
+private struct PremiumCorkTexture: View {
     var body: some View {
         Canvas { context, size in
             let bounds = Path(CGRect(origin: .zero, size: size))
-            context.fill(
-                bounds,
-                with: .linearGradient(
-                    Gradient(colors: [Color(hex: 0xB9824E), Color(hex: 0x8E5B32)]),
-                    startPoint: .zero,
-                    endPoint: CGPoint(x: size.width, y: size.height)
-                )
-            )
-
+            context.fill(bounds, with: .linearGradient(Gradient(colors: [Color(hex: 0xB98250), Color(hex: 0x86512D)]), startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)))
             var state: UInt64 = 0x9E3779B97F4A7C15
             func random() -> CGFloat {
                 state = state &* 2862933555777941757 &+ 3037000493
                 return CGFloat((state >> 33) & 0xFFFF) / CGFloat(0xFFFF)
             }
-
-            let fleckColors = [
-                Color(hex: 0x4F2F1C).opacity(0.28),
-                Color(hex: 0x6D4226).opacity(0.32),
-                Color(hex: 0xD7AC72).opacity(0.34),
-                Color(hex: 0xE9C997).opacity(0.24),
-                Color.black.opacity(0.13)
-            ]
-
-            for index in 0..<980 {
+            let colors = [Color(hex: 0x4F2F1C).opacity(0.30), Color(hex: 0xD7AC72).opacity(0.38), Color(hex: 0xE8C391).opacity(0.25), Color.black.opacity(0.12)]
+            for index in 0..<820 {
                 let x = random() * size.width
                 let y = random() * size.height
-                let width = max(0.8, random() * size.width * 0.010)
-                let height = max(0.5, width * (0.18 + random() * 0.48))
-                let angle = (random() - 0.5) * 1.1
-                var fleck = Path(roundedRect: CGRect(x: -width * 0.5, y: -height * 0.5, width: width, height: height), cornerRadius: height * 0.45)
-                let transform = CGAffineTransform(translationX: x, y: y).rotated(by: angle)
-                fleck = fleck.applying(transform)
-                context.fill(fleck, with: .color(fleckColors[index % fleckColors.count]))
-            }
-
-            for index in 0..<95 {
-                let y = random() * size.height
-                var fiber = Path()
-                fiber.move(to: CGPoint(x: random() * size.width * 0.25, y: y))
-                fiber.addCurve(
-                    to: CGPoint(x: size.width * (0.70 + random() * 0.30), y: y + (random() - 0.5) * 12),
-                    control1: CGPoint(x: size.width * 0.34, y: y - 5 + random() * 10),
-                    control2: CGPoint(x: size.width * 0.66, y: y - 5 + random() * 10)
-                )
-                context.stroke(fiber, with: .color(Color(hex: 0xE1B27A).opacity(index % 3 == 0 ? 0.18 : 0.09)), lineWidth: 0.45 + random() * 0.6)
+                let w = max(0.8, random() * size.width * 0.009)
+                let h = max(0.45, w * (0.18 + random() * 0.42))
+                var fleck = Path(roundedRect: CGRect(x: -w * 0.5, y: -h * 0.5, width: w, height: h), cornerRadius: h * 0.5)
+                fleck = fleck.applying(CGAffineTransform(translationX: x, y: y).rotated(by: (random() - 0.5) * 1.2))
+                context.fill(fleck, with: .color(colors[index % colors.count]))
             }
         }
         .allowsHitTesting(false)
     }
 }
 
-private struct PaperGrain: View {
+private struct PremiumPaperGrain: View {
     var body: some View {
         Canvas { context, size in
-            for index in 0..<120 {
-                let x = CGFloat((index * 43) % 119) / 119 * size.width
-                let y = CGFloat((index * 71) % 127) / 127 * size.height
-                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 1.2, height: 1.2)), with: .color(.black.opacity(0.025)))
+            for index in 0..<170 {
+                let x = CGFloat((index * 43) % 173) / 173 * size.width
+                let y = CGFloat((index * 71) % 179) / 179 * size.height
+                context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 1.15, height: 1.15)), with: .color(.black.opacity(0.028)))
             }
-            for index in 0..<18 {
-                let y = size.height * CGFloat(index + 1) / 19
-                context.stroke(Path(CGRect(x: 0, y: y, width: size.width, height: 0.3)), with: .color(.white.opacity(0.10)), lineWidth: 0.3)
+            for index in 0..<24 {
+                let y = size.height * CGFloat(index + 1) / 25
+                context.stroke(Path(CGRect(x: 0, y: y, width: size.width, height: 0.28)), with: .color(.white.opacity(0.11)), lineWidth: 0.28)
             }
         }
         .allowsHitTesting(false)

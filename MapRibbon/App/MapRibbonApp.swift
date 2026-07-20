@@ -20,6 +20,8 @@ struct MapRibbonApp: App {
                     NavigationStack { BoardsHomeView() }
                 } else if launchArguments.contains("--screenshot-library") {
                     NavigationStack { BoardLibraryView() }
+                } else if launchArguments.contains("--screenshot-atlas-japan") {
+                    NavigationStack { AtlasView(initialCountry: .japan) }
                 } else if launchArguments.contains("--screenshot-atlas") {
                     NavigationStack { AtlasView() }
                 } else if launchArguments.contains("--screenshot-settings") {
@@ -34,8 +36,12 @@ struct MapRibbonApp: App {
                     ScreenshotPlacesFixtureView()
                 } else if launchArguments.contains("--screenshot-board-editor") {
                     BoardEditorScreenshotFixtureView()
+                } else if launchArguments.contains("--screenshot-board-story") {
+                    BoardCanvasScreenshotFixtureView(aspectRatio: 9.0 / 16.0)
+                } else if launchArguments.contains("--screenshot-board-feed") {
+                    BoardCanvasScreenshotFixtureView(aspectRatio: 4.0 / 5.0)
                 } else if launchArguments.contains("--screenshot-board-canvas") {
-                    BoardCanvasScreenshotFixtureView()
+                    BoardCanvasScreenshotFixtureView(aspectRatio: 3.0 / 4.0)
                 } else {
                     RootView()
                 }
@@ -66,17 +72,18 @@ private struct BoardEditorScreenshotFixtureView: View {
 @MainActor
 private struct BoardCanvasScreenshotFixtureView: View {
     @State private var draft: BoardDraft
+    let aspectRatio: CGFloat
 
-    init() {
+    init(aspectRatio: CGFloat = 3.0 / 4.0) {
+        self.aspectRatio = aspectRatio
         _draft = State(initialValue: BoardScreenshotFixture.makeDraft())
     }
 
     var body: some View {
         ZStack {
             MRColor.background.ignoresSafeArea()
-
             BoardCanvasView(model: draft.renderModel, watermark: false)
-                .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                .aspectRatio(aspectRatio, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
                 .shadow(color: .black.opacity(0.14), radius: 18, y: 8)
                 .padding(.horizontal, 18)
@@ -282,6 +289,14 @@ private enum BoardScreenshotFixture {
     }
 
     private static func makePhoto(symbol: String, title: String, colors: [UIColor]) -> UIImage {
+        let fixtureNames: [String: String] = [
+            "경복궁": "FixtureGyeongbokgung",
+            "광장시장": "FixtureGwangjang",
+            "시청 카페": "FixtureCityHallCafe",
+            "덕수궁 돌담길": "FixtureDeoksugung",
+            "한강 야경": "FixtureHanRiver",
+        ]
+        if let assetName = fixtureNames[title], let image = UIImage(named: assetName) { return image }
         let size = CGSize(width: 700, height: 520)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
