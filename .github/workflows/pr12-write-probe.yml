@@ -1,0 +1,27 @@
+name: PR12 branch write probe
+
+on:
+  push:
+    branches:
+      - claude/board-image-quality-4zwhs8
+    paths:
+      - .github/workflows/pr12-write-probe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/board-image-quality-4zwhs8
+          fetch-depth: 0
+      - run: |
+          git config user.name "PR12 Write Probe"
+          git config user.email "pr12-write-probe@users.noreply.github.com"
+          printf 'probe commit: %s\n' "$GITHUB_SHA" > Docs/PR12_WRITE_PROBE.txt
+          git add Docs/PR12_WRITE_PROBE.txt
+          git commit -m "chore: verify PR branch action writes"
+          git push origin HEAD:claude/board-image-quality-4zwhs8
