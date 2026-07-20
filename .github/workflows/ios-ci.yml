@@ -19,15 +19,22 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.head_ref }}
-          fetch-depth: 0
+          fetch-depth: 1
+          show-progress: false
 
       - name: Apply reviewed source changes
         shell: bash
         run: |
-          set -euo pipefail
-          test -f Scripts/apply_pr11_full_review.py.gz.b64
-          base64 --decode Scripts/apply_pr11_full_review.py.gz.b64 | gzip -d > Scripts/apply_pr11_full_review.py
-          python3 Scripts/apply_pr11_full_review.py
+          set -uo pipefail
+          test -f Scripts/apply_pr11_full_review.py.gz.b64 || { echo "patch payload missing"; exit 1; }
+          base64 --decode Scripts/apply_pr11_full_review.py.gz.b64 > "$RUNNER_TEMP/pr11-patch.gz" || { echo "base64 decode failed"; exit 1; }
+          wc -c "$RUNNER_TEMP/pr11-patch.gz"
+          gzip -t "$RUNNER_TEMP/pr11-patch.gz" || { echo "gzip validation failed"; exit 1; }
+          gzip -dc "$RUNNER_TEMP/pr11-patch.gz" > Scripts/apply_pr11_full_review.py
+          python3 Scripts/apply_pr11_full_review.py > "$RUNNER_TEMP/pr11-patch.log" 2>&1
+          STATUS=$?
+          cat "$RUNNER_TEMP/pr11-patch.log"
+          if [ "$STATUS" -ne 0 ]; then exit "$STATUS"; fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
