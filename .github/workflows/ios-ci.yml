@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -24,6 +24,26 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Apply PR 12 review fixes
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/apply_pr12_fixes.py
+          git diff --check
+          if git diff --quiet; then
+            echo "Review fixes already applied"
+          else
+            git config user.name "OpenAI PR Review"
+            git config user.email "openai-pr-review@users.noreply.github.com"
+            git add MapRibbon MapRibbonTests
+            git commit -m "fix: address PR 12 atlas and editor review"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          fi
 
       - name: Select an available iPhone simulator
         id: simulator
@@ -104,8 +124,12 @@ jobs:
           FLAG="$1"
           NAME="$2"
           WAIT="${3:-3}"
+          LANGUAGE="${4:-ko}"
+          LOCALE="${5:-ko_KR}"
+          APPEARANCE="${6:-light}"
           xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" -AppleLanguages "(ko)" -AppleLocale ko_KR
+          xcrun simctl ui "$UDID" appearance "$APPEARANCE" || true
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" -AppleLanguages "($LANGUAGE)" -AppleLocale "$LOCALE"
           sleep "$WAIT"
           xcrun simctl io "$UDID" screenshot "$OUT/$NAME.png"
           SH
@@ -171,6 +195,48 @@ jobs:
         timeout-minutes: 2
         run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-canvas board-poster"
 
+      - name: Capture export sheet
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-export export"
+
+      - name: Capture place manager
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-places places"
+
+      - name: Capture board feed
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-feed board-feed"
+
+      - name: Capture board story
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-story board-story"
+
+      - name: Capture Japanese board poster
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-canvas board-poster-ja 3 ja ja_JP"
+
+      - name: Capture dark home
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-home home-dark 3 ko ko_KR dark"
+
+      - name: Capture dark Korea atlas
+        if: steps.build.outputs.status == '0'
+        continue-on-error: true
+        timeout-minutes: 2
+        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-atlas atlas-korea-dark 6 ko ko_KR dark"
+
       - name: Validate screenshot matrix
         id: screenshots
         if: always()
@@ -178,8 +244,8 @@ jobs:
         run: |
           OUT="$RUNNER_TEMP/mapribbon-ui-overhaul"
           COUNT="$(find "$OUT" -maxdepth 1 -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
-          echo "Captured $COUNT of 10 expected screenshots"
-          if [ "$COUNT" -eq 10 ]; then
+          echo "Captured $COUNT of 17 expected screenshots"
+          if [ "$COUNT" -eq 17 ]; then
             STATUS=0
           else
             STATUS=1
@@ -188,7 +254,7 @@ jobs:
           {
             echo "device=${{ steps.simulator.outputs.name }}"
             echo "runtime=${{ steps.simulator.outputs.runtime }}"
-            echo "commit=$GITHUB_SHA"
+            echo "commit=$(git rev-parse HEAD)"
             echo "screenshot_count=$COUNT"
           } > "$OUT/metadata.txt"
           ls -lh "$OUT" || true
