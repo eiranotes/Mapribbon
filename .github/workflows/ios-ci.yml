@@ -31,9 +31,15 @@ jobs:
           (
             set -euo pipefail
             ls -l Scripts/apply_pr11_full_review.part*
+            sha256sum Scripts/apply_pr11_full_review.part*
+            echo "fec0e69ae61d38dce89dcdc7e0cb477fde1cf6274691a53ec263eab2f70a7eaa  Scripts/apply_pr11_full_review.part00" | sha256sum -c -
+            echo "dfdcd4aa69fcc63815f1a01f8607121bde2a108c52271e9178d66f0cb4b771f6  Scripts/apply_pr11_full_review.part01" | sha256sum -c -
+            echo "fe1a725064bedde221f8935d720f4d0ba5c86db08594361897dfbff58ab7a72b  Scripts/apply_pr11_full_review.part02" | sha256sum -c -
+            echo "03593b675f6f6f5e919b6c955691fe5e9481ff4d1afa0018409adfc179bcf2ea  Scripts/apply_pr11_full_review.part03" | sha256sum -c -
+            echo "79d52e68a967f1b89ac448a3204d1710b36111f2a1ae0b7a23d49de19d7417f5  Scripts/apply_pr11_full_review.part04" | sha256sum -c -
+            echo "9a5328d8c47d565804e25d1c33d70411b053c9cb9664e47456cebc4bc1ee032a  Scripts/apply_pr11_full_review.part05" | sha256sum -c -
+            echo "206aff4a33931d255475f25fdfc8970d0c3996bc661380ba425fbb5a5f1d35b1  Scripts/apply_pr11_full_review.part06" | sha256sum -c -
             cat Scripts/apply_pr11_full_review.part* > "$RUNNER_TEMP/pr11-patch.b64"
-            wc -c "$RUNNER_TEMP/pr11-patch.b64"
-            sha256sum "$RUNNER_TEMP/pr11-patch.b64"
             echo "87bd06407371fc16f5e6969a75514f6347ee9a3d1b9cd3f5c926819c42eeccfa  $RUNNER_TEMP/pr11-patch.b64" | sha256sum -c -
             base64 --decode "$RUNNER_TEMP/pr11-patch.b64" > "$RUNNER_TEMP/pr11-patch.gz"
             gzip -t "$RUNNER_TEMP/pr11-patch.gz"
@@ -57,7 +63,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr11-chunked-patch-diagnostics
+          name: pr11-chunk-hash-diagnostics
           path: ${{ runner.temp }}/pr11-patch.log
           retention-days: 2
           if-no-files-found: error
