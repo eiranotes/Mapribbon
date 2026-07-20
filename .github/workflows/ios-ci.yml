@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
@@ -24,26 +24,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
-          fetch-depth: 0
-
-      - name: Apply PR 12 review fixes
-        if: github.event_name == 'pull_request' && github.event.pull_request.number == 12
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 .github/scripts/apply_pr12_fixes.py
-          git diff --check
-          if git diff --quiet; then
-            echo "Review fixes already applied"
-          else
-            git config user.name "OpenAI PR Review"
-            git config user.email "openai-pr-review@users.noreply.github.com"
-            git add MapRibbon MapRibbonTests
-            git commit -m "fix: address PR 12 atlas and editor review"
-            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
-          fi
 
       - name: Select an available iPhone simulator
         id: simulator
@@ -127,9 +107,14 @@ jobs:
           LANGUAGE="${4:-ko}"
           LOCALE="${5:-ko_KR}"
           APPEARANCE="${6:-light}"
+          STYLE_ARGS=(-AppleInterfaceStyle Light)
+          if [ "$APPEARANCE" = "dark" ]; then
+            STYLE_ARGS=(-AppleInterfaceStyle Dark)
+          fi
           xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
           xcrun simctl ui "$UDID" appearance "$APPEARANCE" || true
-          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" -AppleLanguages "($LANGUAGE)" -AppleLocale "$LOCALE"
+          sleep 1
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" "${STYLE_ARGS[@]}" -AppleLanguages "($LANGUAGE)" -AppleLocale "$LOCALE"
           sleep "$WAIT"
           xcrun simctl io "$UDID" screenshot "$OUT/$NAME.png"
           SH
@@ -254,7 +239,7 @@ jobs:
           {
             echo "device=${{ steps.simulator.outputs.name }}"
             echo "runtime=${{ steps.simulator.outputs.runtime }}"
-            echo "commit=$(git rev-parse HEAD)"
+            echo "commit=$GITHUB_SHA"
             echo "screenshot_count=$COUNT"
           } > "$OUT/metadata.txt"
           ls -lh "$OUT" || true
