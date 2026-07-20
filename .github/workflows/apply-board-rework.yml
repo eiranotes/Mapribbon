@@ -49,15 +49,33 @@ jobs:
           python3 -m py_compile scripts/apply_board_rework.py
 
       - name: Apply board, fixture, atlas, test, and CI changes
-        run: python3 scripts/apply_board_rework.py
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/apply_board_rework.py > "$RUNNER_TEMP/board-rework.log" 2>&1 || {
+            cat "$RUNNER_TEMP/board-rework.log"
+            exit 1
+          }
+          cat "$RUNNER_TEMP/board-rework.log"
+
+      - name: Upload apply diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: board-rework-apply-log
+          path: ${{ runner.temp }}/board-rework.log
+          if-no-files-found: warn
+          retention-days: 3
 
       - name: Remove staging inputs
+        if: success()
         shell: bash
         run: |
           rm -rf scripts/staging
           rm -f scripts/board_rework_probe.txt scripts/staging_readme.txt
 
       - name: Commit final source
+        if: success()
         shell: bash
         run: |
           set -euo pipefail
