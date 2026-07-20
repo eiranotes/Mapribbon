@@ -1,0 +1,63 @@
+name: Apply board artwork rework
+
+on:
+  push:
+    branches:
+      - agent/board-artwork-atlas-rework
+    paths:
+      - scripts/staging/**
+      - .github/workflows/apply-board-rework.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Checkout task branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/board-artwork-atlas-rework
+
+      - name: Assemble and validate rework script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat scripts/staging/apply_board_rework.part00 \
+              scripts/staging/apply_board_rework.part01 \
+              scripts/staging/apply_board_rework.part02 \
+              scripts/staging/apply_board_rework.part03 \
+              scripts/staging/apply_board_rework.part04 \
+              scripts/staging/apply_board_rework.part05 \
+              scripts/staging/apply_board_rework.part06 \
+              scripts/staging/apply_board_rework.part07 \
+              scripts/staging/apply_board_rework.part08 \
+              scripts/staging/apply_board_rework.part09 \
+              scripts/staging/apply_board_rework.part10 \
+              scripts/staging/apply_board_rework.part11 \
+              scripts/staging/apply_board_rework.part12 \
+              > scripts/apply_board_rework.py
+          python3 -m py_compile scripts/apply_board_rework.py
+
+      - name: Apply board, fixture, atlas, test, and CI changes
+        run: python3 scripts/apply_board_rework.py
+
+      - name: Remove staging inputs
+        shell: bash
+        run: |
+          rm -rf scripts/staging
+          rm -f scripts/board_rework_probe.txt scripts/staging_readme.txt
+
+      - name: Commit final source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "feat: rebuild premium board artwork and dual-country atlas"
+          git push origin HEAD:agent/board-artwork-atlas-rework
