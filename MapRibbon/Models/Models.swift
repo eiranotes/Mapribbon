@@ -92,6 +92,42 @@ enum BoardTemplate: String, CaseIterable, Codable, Identifiable {
     }
 }
 
+enum BoardThreadColor: String, CaseIterable, Codable, Identifiable {
+    case vermilion, indigo, forest, ochre, charcoal, rose
+
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .vermilion: return "주홍"
+        case .indigo: return "남색"
+        case .forest: return "숲색"
+        case .ochre: return "황토"
+        case .charcoal: return "먹색"
+        case .rose: return "장미"
+        }
+    }
+    var primaryHex: UInt {
+        switch self {
+        case .vermilion: return 0xA43A2F
+        case .indigo: return 0x36506E
+        case .forest: return 0x3F654F
+        case .ochre: return 0xA56B2A
+        case .charcoal: return 0x4B4B49
+        case .rose: return 0xA64C62
+        }
+    }
+    var highlightHex: UInt {
+        switch self {
+        case .vermilion: return 0xE58B76
+        case .indigo: return 0x8DA6C1
+        case .forest: return 0x8FAF98
+        case .ochre: return 0xD9A767
+        case .charcoal: return 0xA8A8A2
+        case .rose: return 0xD895A5
+        }
+    }
+}
+
 enum ExportFormat: String, CaseIterable, Identifiable {
     case story
     case feed
@@ -146,6 +182,7 @@ struct BoardRenderModel {
     let date: Date
     let places: [BoardPlace]
     let template: BoardTemplate
+    let threadColor: BoardThreadColor
     let mapImage: UIImage
     let normalizedPoints: [UUID: CGPoint]
     let photoImages: [String: UIImage]
@@ -167,6 +204,7 @@ final class BoardDraft: Identifiable {
     var title: String
     var places: [BoardPlace]
     var template: BoardTemplate
+    var threadColor: BoardThreadColor
     var mapImage: UIImage
     var normalizedPoints: [UUID: CGPoint]
     var photoImages: [String: UIImage]
@@ -177,6 +215,7 @@ final class BoardDraft: Identifiable {
         title: String,
         places: [BoardPlace],
         template: BoardTemplate = .ribbon,
+        threadColor: BoardThreadColor = .vermilion,
         mapImage: UIImage,
         normalizedPoints: [UUID: CGPoint],
         photoImages: [String: UIImage]
@@ -186,6 +225,7 @@ final class BoardDraft: Identifiable {
         self.title = title
         self.places = places
         self.template = template
+        self.threadColor = threadColor
         self.mapImage = mapImage
         self.normalizedPoints = normalizedPoints
         self.photoImages = photoImages
@@ -198,6 +238,7 @@ final class BoardDraft: Identifiable {
             date: date,
             places: places,
             template: template,
+            threadColor: threadColor,
             mapImage: mapImage,
             normalizedPoints: normalizedPoints,
             photoImages: photoImages
@@ -210,6 +251,15 @@ struct BoardArchivePayload: Codable {
     let title: String
     let places: [BoardPlace]
     let template: BoardTemplate
+    let threadColor: BoardThreadColor?
+
+    init(date: Date, title: String, places: [BoardPlace], template: BoardTemplate, threadColor: BoardThreadColor? = nil) {
+        self.date = date
+        self.title = title
+        self.places = places
+        self.template = template
+        self.threadColor = threadColor
+    }
 }
 
 @Model

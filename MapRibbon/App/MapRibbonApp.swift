@@ -130,7 +130,7 @@ private enum BoardScreenshotFixture {
                 subtitle: "오전 10:30–오전 11:20",
                 symbol: "building.columns.fill",
                 colors: [UIColor(red: 0.28, green: 0.55, blue: 0.72, alpha: 1), UIColor(red: 0.70, green: 0.84, blue: 0.88, alpha: 1)],
-                point: CGPoint(x: 0.22, y: 0.28),
+                point: CGPoint(x: 0.16, y: 0.18),
                 photoCount: 3
             ),
             PlaceSpec(
@@ -138,7 +138,7 @@ private enum BoardScreenshotFixture {
                 subtitle: "오후 12:10–오후 12:52",
                 symbol: "storefront.fill",
                 colors: [UIColor(red: 0.70, green: 0.31, blue: 0.20, alpha: 1), UIColor(red: 0.94, green: 0.69, blue: 0.28, alpha: 1)],
-                point: CGPoint(x: 0.75, y: 0.30),
+                point: CGPoint(x: 0.80, y: 0.24),
                 photoCount: 3
             ),
             PlaceSpec(
@@ -146,7 +146,7 @@ private enum BoardScreenshotFixture {
                 subtitle: "오후 1:10–오후 1:38",
                 symbol: "cup.and.saucer.fill",
                 colors: [UIColor(red: 0.43, green: 0.34, blue: 0.27, alpha: 1), UIColor(red: 0.78, green: 0.64, blue: 0.46, alpha: 1)],
-                point: CGPoint(x: 0.28, y: 0.53),
+                point: CGPoint(x: 0.38, y: 0.50),
                 photoCount: 3
             ),
             PlaceSpec(
@@ -154,7 +154,7 @@ private enum BoardScreenshotFixture {
                 subtitle: "오후 3:20–오후 4:05",
                 symbol: "tree.fill",
                 colors: [UIColor(red: 0.20, green: 0.42, blue: 0.25, alpha: 1), UIColor(red: 0.62, green: 0.72, blue: 0.46, alpha: 1)],
-                point: CGPoint(x: 0.25, y: 0.75),
+                point: CGPoint(x: 0.18, y: 0.76),
                 photoCount: 2
             ),
             PlaceSpec(
@@ -162,7 +162,7 @@ private enum BoardScreenshotFixture {
                 subtitle: "오후 6:10–오후 8:40",
                 symbol: "moon.stars.fill",
                 colors: [UIColor(red: 0.05, green: 0.13, blue: 0.27, alpha: 1), UIColor(red: 0.18, green: 0.35, blue: 0.50, alpha: 1)],
-                point: CGPoint(x: 0.70, y: 0.75),
+                point: CGPoint(x: 0.82, y: 0.84),
                 photoCount: 3
             )
         ]
@@ -201,6 +201,7 @@ private enum BoardScreenshotFixture {
             title: "서울 하루 산책",
             places: places,
             template: .ribbon,
+            threadColor: .indigo,
             mapImage: makeMapImage(),
             normalizedPoints: normalizedPoints,
             photoImages: photoImages
@@ -208,7 +209,7 @@ private enum BoardScreenshotFixture {
     }
 
     private static func makeMapImage() -> UIImage {
-        let size = CGSize(width: 900, height: 1_200)
+        let size = CGSize(width: 1_200, height: 1_200)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = true
@@ -237,8 +238,8 @@ private enum BoardScreenshotFixture {
 
             UIColor(red: 0.74, green: 0.75, blue: 0.70, alpha: 0.34).setStroke()
             context.setLineWidth(1.4)
-            for index in 0..<13 {
-                let x = CGFloat(35 + index * 72)
+            for index in 0..<17 {
+                let x = CGFloat(28 + index * 72)
                 context.move(to: CGPoint(x: x, y: 0))
                 context.addCurve(
                     to: CGPoint(x: x + CGFloat((index % 3) * 28 - 24), y: size.height),
@@ -250,26 +251,28 @@ private enum BoardScreenshotFixture {
 
             UIColor(red: 0.64, green: 0.75, blue: 0.77, alpha: 0.52).setStroke()
             context.setLineWidth(74)
-            context.move(to: CGPoint(x: 800, y: -30))
+            context.move(to: CGPoint(x: 1_055, y: -30))
             context.addCurve(
-                to: CGPoint(x: 700, y: 1_250),
-                control1: CGPoint(x: 675, y: 330),
-                control2: CGPoint(x: 845, y: 820)
+                to: CGPoint(x: 930, y: 1_250),
+                control1: CGPoint(x: 850, y: 300),
+                control2: CGPoint(x: 1_080, y: 820)
             )
             context.strokePath()
 
             UIColor(red: 0.83, green: 0.80, blue: 0.69, alpha: 0.42).setFill()
-            let park = UIBezierPath(roundedRect: CGRect(x: 310, y: 760, width: 290, height: 240), cornerRadius: 74)
+            let park = UIBezierPath(roundedRect: CGRect(x: 410, y: 735, width: 360, height: 250), cornerRadius: 78)
             park.fill()
 
             let labels: [(String, CGPoint)] = [
-                ("경복궁", CGPoint(x: 220, y: 190)),
-                ("종로", CGPoint(x: 480, y: 310)),
-                ("광장시장", CGPoint(x: 650, y: 440)),
-                ("시청", CGPoint(x: 350, y: 640)),
-                ("덕수궁", CGPoint(x: 240, y: 855)),
-                ("남산", CGPoint(x: 500, y: 980)),
-                ("한강", CGPoint(x: 755, y: 660))
+                ("서촌", CGPoint(x: 130, y: 170)),
+                ("경복궁", CGPoint(x: 265, y: 245)),
+                ("종로", CGPoint(x: 520, y: 320)),
+                ("광장시장", CGPoint(x: 825, y: 385)),
+                ("시청", CGPoint(x: 390, y: 610)),
+                ("덕수궁", CGPoint(x: 250, y: 790)),
+                ("남산", CGPoint(x: 600, y: 930)),
+                ("성수", CGPoint(x: 945, y: 600)),
+                ("한강", CGPoint(x: 920, y: 835))
             ]
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: UIFont.systemFont(ofSize: 25, weight: .medium),
@@ -281,7 +284,7 @@ private enum BoardScreenshotFixture {
 
             UIColor(red: 0.42, green: 0.40, blue: 0.35, alpha: 0.08).setFill()
             for index in 0..<150 {
-                let x = CGFloat((index * 73) % 900)
+                let x = CGFloat((index * 73) % 1_200)
                 let y = CGFloat((index * 127) % 1_200)
                 context.fillEllipse(in: CGRect(x: x, y: y, width: 2, height: 2))
             }

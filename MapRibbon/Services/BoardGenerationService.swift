@@ -223,8 +223,8 @@ final class MapSnapshotService {
             latitude: (minLat + maxLat) / 2,
             longitude: (minLon + maxLon) / 2
         )
-        let latitudeDelta = max(0.015, (maxLat - minLat) * 1.55)
-        let longitudeDelta = max(0.015, (maxLon - minLon) * 1.55)
+        let latitudeDelta = max(0.045, (maxLat - minLat) * 2.10)
+        let longitudeDelta = max(0.055, (maxLon - minLon) * 2.10)
 
         return MKCoordinateRegion(
             center: center,
