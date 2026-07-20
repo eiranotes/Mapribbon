@@ -89,6 +89,53 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertTrue(BoardThreadColor.allCases.allSatisfy { $0.primaryHex != $0.highlightHex })
     }
 
+    func testRegionNormalizerCoversAllJapanesePrefectures() {
+        let samples: [(String, String)] = [
+            ("北海道", "일본:홋카이도"),
+            ("青森県", "일본:도호쿠"), ("岩手県", "일본:도호쿠"), ("宮城県", "일본:도호쿠"), ("秋田県", "일본:도호쿠"), ("山形県", "일본:도호쿠"), ("福島県", "일본:도호쿠"),
+            ("茨城県", "일본:간토"), ("栃木県", "일본:간토"), ("群馬県", "일본:간토"), ("埼玉県", "일본:간토"), ("千葉県", "일본:간토"), ("東京都", "일본:간토"), ("神奈川県", "일본:간토"),
+            ("新潟県", "일본:주부"), ("富山県", "일본:주부"), ("石川県", "일본:주부"), ("福井県", "일본:주부"), ("山梨県", "일본:주부"), ("長野県", "일본:주부"), ("岐阜県", "일본:주부"), ("静岡県", "일본:주부"), ("愛知県", "일본:주부"),
+            ("三重県", "일본:간사이"), ("滋賀県", "일본:간사이"), ("京都府", "일본:간사이"), ("大阪府", "일본:간사이"), ("兵庫県", "일본:간사이"), ("奈良県", "일본:간사이"), ("和歌山県", "일본:간사이"),
+            ("鳥取県", "일본:주고쿠"), ("島根県", "일본:주고쿠"), ("岡山県", "일본:주고쿠"), ("広島県", "일본:주고쿠"), ("山口県", "일본:주고쿠"),
+            ("徳島県", "일본:시코쿠"), ("香川県", "일본:시코쿠"), ("愛媛県", "일본:시코쿠"), ("高知県", "일본:시코쿠"),
+            ("福岡県", "일본:규슈"), ("佐賀県", "일본:규슈"), ("長崎県", "일본:규슈"), ("熊本県", "일본:규슈"), ("大分県", "일본:규슈"), ("宮崎県", "일본:규슈"), ("鹿児島県", "일본:규슈"), ("沖縄県", "일본:규슈")
+        ]
+
+        XCTAssertEqual(samples.count, 47)
+        for (administrativeArea, expected) in samples {
+            XCTAssertEqual(RegionNormalizer.key(from: administrativeArea), expected, administrativeArea)
+        }
+    }
+
+    func testRegionNormalizerAcceptsEnglishPrefectureNames() {
+        XCTAssertEqual(RegionNormalizer.key(from: "Toyama Prefecture"), "일본:주부")
+        XCTAssertEqual(RegionNormalizer.key(from: "Wakayama Prefecture"), "일본:간사이")
+        XCTAssertEqual(RegionNormalizer.key(from: "Yamaguchi Prefecture"), "일본:주고쿠")
+        XCTAssertEqual(RegionNormalizer.key(from: "Kochi Prefecture"), "일본:시코쿠")
+        XCTAssertEqual(RegionNormalizer.key(from: "Oita Prefecture"), "일본:규슈")
+    }
+
+    func testBoardRegionSummaryPreservesVisibleTravelOrder() {
+        let places = [
+            makePlace(title: "숨김", administrativeArea: "서울특별시", isHidden: true),
+            makePlace(title: "오사카", administrativeArea: "Osaka Prefecture"),
+            makePlace(title: "도쿄", administrativeArea: "Tokyo Metropolis"),
+            makePlace(title: "교토", administrativeArea: "京都府")
+        ]
+
+        XCTAssertEqual(BoardRegionSummary.regionKeys(from: places), ["일본:간사이", "일본:간토"])
+        XCTAssertEqual(BoardRegionSummary.primaryRegion(from: places), "일본:간사이")
+    }
+
+    func testAtlasCoverageKeepsLegacyFallbackRegions() {
+        let missing = AtlasVisitCoverage.missingRegionKeys(
+            visited: ["일본:간토", "일본:간사이", "일본:규슈"],
+            actual: ["일본:간토"],
+            country: .japan
+        )
+        XCTAssertEqual(missing, ["일본:간사이", "일본:규슈"])
+    }
+
     private var sampleGeoPoints: [CGPoint] {
         [
             CGPoint(x: 0.16, y: 0.18), CGPoint(x: 0.80, y: 0.24),
@@ -124,6 +171,30 @@ final class PhotoClustererTests: XCTestCase {
             XCTAssertGreaterThanOrEqual(placement.center.y - halfHeight, 0, file: file, line: line)
             XCTAssertLessThanOrEqual(placement.center.y + halfHeight, 1, file: file, line: line)
         }
+    }
+
+    private func makePlace(
+        title: String,
+        administrativeArea: String,
+        isHidden: Bool = false
+    ) -> BoardPlace {
+        let identifier = UUID().uuidString
+        return BoardPlace(
+            id: UUID(),
+            title: title,
+            subtitle: nil,
+            caption: nil,
+            addressSummary: administrativeArea,
+            administrativeArea: administrativeArea,
+            locality: nil,
+            latitude: 35.0,
+            longitude: 135.0,
+            startDate: Date(timeIntervalSince1970: 1_700_000_000),
+            endDate: Date(timeIntervalSince1970: 1_700_003_600),
+            assetIdentifiers: [identifier],
+            representativeAssetIdentifier: identifier,
+            isHidden: isHidden
+        )
     }
 
     private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {

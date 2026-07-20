@@ -23,6 +23,7 @@ enum AtlasCountry: String, CaseIterable, Identifiable {
     var title: String { self == .korea ? "한국" : "일본" }
     var fullTitle: String { self == .korea ? "대한민국" : "일본" }
     var total: Int { regions.count }
+    var regionKeys: [String] { regions.map(\.key) }
 
     var mapRegion: MKCoordinateRegion {
         switch self {
@@ -76,6 +77,16 @@ enum AtlasCountry: String, CaseIterable, Identifiable {
     }
 }
 
+enum AtlasVisitCoverage {
+    static func missingRegionKeys(
+        visited: Set<String>,
+        actual: Set<String>,
+        country: AtlasCountry
+    ) -> [String] {
+        country.regionKeys.filter { visited.contains($0) && !actual.contains($0) }
+    }
+}
+
 private struct AtlasVisit: Identifiable {
     let id: String
     let title: String
@@ -83,6 +94,7 @@ private struct AtlasVisit: Identifiable {
     let photoCount: Int
     let coordinate: CLLocationCoordinate2D
     let country: AtlasCountry
+    let regionKey: String?
 }
 
 struct AtlasView: View {
@@ -127,7 +139,8 @@ struct AtlasView: View {
                     date: board.date,
                     photoCount: place.photoCount,
                     coordinate: place.coordinate,
-                    country: resolvedCountry
+                    country: resolvedCountry,
+                    regionKey: RegionNormalizer.key(from: place.administrativeArea)
                 )
             }
         }
@@ -135,9 +148,16 @@ struct AtlasView: View {
 
     private var mapVisits: [AtlasVisit] {
         let actual = decodedVisits.filter { $0.country == country }
-        if !actual.isEmpty { return actual }
-        return visibleRegions
-            .filter { visited.contains($0.key) }
+        let actualRegionKeys = Set(actual.compactMap(\.regionKey))
+        let fallbackRegionKeys = Set(
+            AtlasVisitCoverage.missingRegionKeys(
+                visited: visited,
+                actual: actualRegionKeys,
+                country: country
+            )
+        )
+        let fallback = visibleRegions
+            .filter { fallbackRegionKeys.contains($0.key) }
             .map {
                 AtlasVisit(
                     id: "region-\($0.key)",
@@ -145,9 +165,11 @@ struct AtlasView: View {
                     date: nil,
                     photoCount: 0,
                     coordinate: $0.coordinate,
-                    country: country
+                    country: country,
+                    regionKey: $0.key
                 )
             }
+        return actual + fallback
     }
 
     private var selectedVisit: AtlasVisit? {
@@ -280,8 +302,9 @@ struct AtlasView: View {
             .padding(.vertical, 8)
             .background(.regularMaterial)
             .clipShape(Capsule())
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.top, 68)
+            .padding(.leading, 14)
             .allowsHitTesting(false)
         }
     }
