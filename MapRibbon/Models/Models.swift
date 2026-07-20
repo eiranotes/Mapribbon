@@ -108,7 +108,7 @@ enum BoardThreadColor: String, CaseIterable, Codable, Identifiable {
     }
     var primaryHex: UInt {
         switch self {
-        case .vermilion: return 0xA43A2F
+        case .vermilion: return 0xBE3D2C
         case .indigo: return 0x36506E
         case .forest: return 0x3F654F
         case .ochre: return 0xA56B2A
@@ -118,7 +118,7 @@ enum BoardThreadColor: String, CaseIterable, Codable, Identifiable {
     }
     var highlightHex: UInt {
         switch self {
-        case .vermilion: return 0xE58B76
+        case .vermilion: return 0xE8927A
         case .indigo: return 0x8DA6C1
         case .forest: return 0x8FAF98
         case .ochre: return 0xD9A767

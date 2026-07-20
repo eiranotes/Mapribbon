@@ -1,4 +1,5 @@
 import XCTest
+import CoreGraphics
 @testable import MapRibbon
 
 final class PhotoClustererTests: XCTestCase {
@@ -36,6 +37,42 @@ final class PhotoClustererTests: XCTestCase {
         let story = BoardLayoutEngine.cardPlacements(for: 5, aspectRatio: 9.0 / 16.0)
         let poster = BoardLayoutEngine.cardPlacements(for: 5, aspectRatio: 3.0 / 4.0)
         XCTAssertGreaterThan(story[0].widthFactor, poster[0].widthFactor)
+    }
+
+    func testGeoSeededLayoutAvoidsPhotoOverlap() {
+        let geoPoints = [
+            CGPoint(x: 0.16, y: 0.18), CGPoint(x: 0.80, y: 0.24), CGPoint(x: 0.38, y: 0.50),
+            CGPoint(x: 0.18, y: 0.76), CGPoint(x: 0.82, y: 0.84)
+        ]
+        for aspectRatio in [CGFloat(9.0 / 16.0), 3.0 / 4.0, 4.0 / 5.0] {
+            let placements = BoardLayoutEngine.placements(count: geoPoints.count, geoPoints: geoPoints, aspectRatio: aspectRatio)
+            XCTAssertEqual(placements.count, geoPoints.count)
+            assertNoOverlap(placements, aspectRatio: aspectRatio)
+        }
+    }
+
+    func testDegenerateGeoPointsStillProduceValidLayout() {
+        let samePoint = Array(repeating: CGPoint(x: 0.5, y: 0.5), count: 5)
+        let placements = BoardLayoutEngine.placements(count: 5, geoPoints: samePoint, aspectRatio: 3.0 / 4.0)
+        XCTAssertEqual(placements.count, 5)
+        assertNoOverlap(placements, aspectRatio: 3.0 / 4.0)
+    }
+
+    private func assertNoOverlap(_ placements: [BoardCardPlacement], aspectRatio: CGFloat, file: StaticString = #filePath, line: UInt = #line) {
+        guard let cardWidth = placements.first?.widthFactor else { return }
+        let cardHeight = cardWidth * BoardLayoutEngine.cardHeightRatio * aspectRatio
+        for i in placements.indices {
+            for j in placements.indices where j > i {
+                let dx = abs(placements[j].center.x - placements[i].center.x)
+                let dy = abs(placements[j].center.y - placements[i].center.y)
+                XCTAssertFalse(
+                    dx < cardWidth * 0.90 && dy < cardHeight * 0.88,
+                    "cards \(i) and \(j) overlap: dx=\(dx), dy=\(dy)",
+                    file: file,
+                    line: line
+                )
+            }
+        }
     }
 
     func testThreadPaletteProvidesDistinctRenderColors() {
