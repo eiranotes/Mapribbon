@@ -94,15 +94,35 @@ jobs:
           xcrun simctl install "$UDID" "$APP_PATH"
           xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
 
+          run_timed() {
+            local seconds="$1"
+            shift
+            python3 - "$seconds" "$@" <<'PY'
+          import subprocess
+          import sys
+
+          timeout = float(sys.argv[1])
+          command = sys.argv[2:]
+          try:
+              result = subprocess.run(command, timeout=timeout)
+          except subprocess.TimeoutExpired:
+              print("Timed out after", timeout, "seconds:", " ".join(command), file=sys.stderr)
+              raise SystemExit(124)
+          raise SystemExit(result.returncode)
+          PY
+          }
+
           capture() {
             local flag="$1"
             local name="$2"
             local language="${3:-ko}"
             local locale="${4:-ko_KR}"
             local wait_seconds="${5:-3}"
-            xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" "$flag" -AppleLanguages "($language)" -AppleLocale "$locale"
+            echo "::group::capture $name"
+            run_timed 25 xcrun simctl launch --terminate-running-process "$UDID" "$BUNDLE_ID" "$flag" -AppleLanguages "($language)" -AppleLocale "$locale"
             sleep "$wait_seconds"
-            xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
+            run_timed 25 xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
+            echo "::endgroup::"
           }
 
           capture --screenshot-onboarding onboarding
