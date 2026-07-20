@@ -30,7 +30,7 @@ struct GenerationFlowView: View {
                     GenerationProgressView(step: step, progress: progress)
                 }
             }
-            .background(MRColor.background.ignoresSafeArea())
+            .background(MRScreenBackground())
             .toolbar {
                 if draft == nil && errorMessage == nil {
                     ToolbarItem(placement: .topBarLeading) {
@@ -60,16 +60,19 @@ struct GenerationProgressView: View {
     let progress: Double
 
     var body: some View {
-        VStack(spacing: 26) {
+        VStack(spacing: 28) {
             Spacer()
-            MRLoadingRing(progress: progress)
-            VStack(spacing: 7) {
-                Text("보드 생성 중")
-                    .font(.title2.weight(.bold))
+            VStack(spacing: 9) {
+                MREyebrow(text: "Day Route — Weaving")
+                Text("하루를 엮는 중")
+                    .font(MRType.display(27))
+                    .foregroundStyle(MRColor.primaryText)
                 Text(step.title)
                     .font(.subheadline)
                     .foregroundStyle(MRColor.secondaryText)
             }
+            MRRouteProgress(progress: progress)
+                .padding(.horizontal, 34)
             VStack(alignment: .leading, spacing: 13) {
                 ForEach(GenerationStep.allCases) { item in
                     HStack(spacing: 10) {
@@ -82,7 +85,7 @@ struct GenerationProgressView: View {
                     }
                 }
             }
-            .mrCard(padding: 18, shadow: false)
+            .mrPlate(padding: 18)
             .padding(.horizontal, 28)
             Spacer()
             Text("사진 원본은 기기 밖으로 전송되지 않습니다.")
@@ -139,7 +142,7 @@ struct BoardEditorView: View {
 
             Spacer(minLength: 0)
         }
-        .background(MRColor.background.ignoresSafeArea())
+        .background(MRScreenBackground())
         .navigationTitle("보드 편집")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -1677,7 +1680,7 @@ struct SavedBoardDetailView: View {
             }
             .padding(20)
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .navigationTitle(board.title)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingActivity) {

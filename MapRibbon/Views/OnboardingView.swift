@@ -15,7 +15,9 @@ struct OnboardingView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("찍어둔 사진이\n하루의 여행 보드가 됩니다.")
-                        .font(.largeTitle.weight(.bold))
+                        .font(MRType.display(30))
+                        .tracking(-0.4)
+                        .lineSpacing(3)
                         .foregroundStyle(MRColor.primaryText)
                     Text("사진에 남은 시간과 장소를 읽어 한 장의 지도 기록으로 엮습니다.")
                         .font(.body)
@@ -27,6 +29,11 @@ struct OnboardingView: View {
                     .aspectRatio(0.84, contentMode: .fit)
                     .frame(maxWidth: 420)
                     .frame(maxWidth: .infinity)
+                    .padding(7)
+                    .background(MRColor.surface)
+                    .clipShape(RoundedRectangle(cornerRadius: MRRadius.card, style: .continuous))
+                    .overlay { MRPlateFrame() }
+                    .overlay(alignment: .top) { MRPinDot().offset(y: -4) }
                     .shadow(color: .black.opacity(0.15), radius: 20, y: 11)
 
                 VStack(alignment: .leading, spacing: 13) {
@@ -44,7 +51,7 @@ struct OnboardingView: View {
             .padding(.horizontal, MRSpacing.screen)
             .padding(.top, 14)
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .safeAreaInset(edge: .bottom) {
             Button("사진에서 하루 찾기") { showingPermission = true }
                 .buttonStyle(MRPrimaryButtonStyle())
@@ -75,8 +82,13 @@ struct OnboardingView: View {
                 .frame(width: 44, height: 44)
                 .background(MRColor.accentSoft)
                 .clipShape(RoundedRectangle(cornerRadius: MRRadius.control, style: .continuous))
-            VStack(alignment: .leading, spacing: 1) {
-                Text("MapRibbon").font(.title3.weight(.bold))
+                .overlay {
+                    RoundedRectangle(cornerRadius: MRRadius.control, style: .continuous)
+                        .stroke(MRColor.accent.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [4, 3.5]))
+                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("MapRibbon")
+                    .font(MRType.plate(19, weight: .bold))
                 Text("사진으로 엮는 여행 기록")
                     .font(.caption)
                     .foregroundStyle(MRColor.secondaryText)
