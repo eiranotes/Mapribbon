@@ -1,6 +1,19 @@
 import SwiftUI
 import SwiftData
 import Photos
+import MapKit
+
+private struct AtlasRegionDescriptor: Identifiable, Hashable {
+    let key: String
+    let name: String
+    let latitude: Double
+    let longitude: Double
+
+    var id: String { key }
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+    }
+}
 
 enum AtlasCountry: String, CaseIterable, Identifiable {
     case korea
@@ -9,33 +22,78 @@ enum AtlasCountry: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String { self == .korea ? "한국" : "일본" }
     var fullTitle: String { self == .korea ? "대한민국" : "일본" }
-    var total: Int { self == .korea ? KoreaRegion.all.count : JapanAtlasRegion.all.count }
+    var total: Int { regions.count }
+
+    var mapRegion: MKCoordinateRegion {
+        switch self {
+        case .korea:
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.2, longitude: 127.8),
+                span: MKCoordinateSpan(latitudeDelta: 7.4, longitudeDelta: 8.4)
+            )
+        case .japan:
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.5, longitude: 137.2),
+                span: MKCoordinateSpan(latitudeDelta: 16.5, longitudeDelta: 19.5)
+            )
+        }
+    }
+
+    fileprivate var regions: [AtlasRegionDescriptor] {
+        switch self {
+        case .korea:
+            return [
+                .init(key: "서울", name: "서울", latitude: 37.5665, longitude: 126.9780),
+                .init(key: "부산", name: "부산", latitude: 35.1796, longitude: 129.0756),
+                .init(key: "대구", name: "대구", latitude: 35.8714, longitude: 128.6014),
+                .init(key: "인천", name: "인천", latitude: 37.4563, longitude: 126.7052),
+                .init(key: "광주", name: "광주", latitude: 35.1595, longitude: 126.8526),
+                .init(key: "대전", name: "대전", latitude: 36.3504, longitude: 127.3845),
+                .init(key: "울산", name: "울산", latitude: 35.5384, longitude: 129.3114),
+                .init(key: "세종", name: "세종", latitude: 36.4800, longitude: 127.2890),
+                .init(key: "경기", name: "경기", latitude: 37.4138, longitude: 127.5183),
+                .init(key: "강원", name: "강원", latitude: 37.8228, longitude: 128.1555),
+                .init(key: "충북", name: "충북", latitude: 36.8635, longitude: 127.7298),
+                .init(key: "충남", name: "충남", latitude: 36.5184, longitude: 126.8000),
+                .init(key: "전북", name: "전북", latitude: 35.7175, longitude: 127.1530),
+                .init(key: "전남", name: "전남", latitude: 34.8679, longitude: 126.9910),
+                .init(key: "경북", name: "경북", latitude: 36.4919, longitude: 128.8889),
+                .init(key: "경남", name: "경남", latitude: 35.4606, longitude: 128.2132),
+                .init(key: "제주", name: "제주", latitude: 33.4996, longitude: 126.5312),
+            ]
+        case .japan:
+            return [
+                .init(key: "일본:홋카이도", name: "홋카이도", latitude: 43.2203, longitude: 142.8635),
+                .init(key: "일본:도호쿠", name: "도호쿠", latitude: 39.7036, longitude: 140.1024),
+                .init(key: "일본:간토", name: "간토", latitude: 35.6762, longitude: 139.6503),
+                .init(key: "일본:주부", name: "주부", latitude: 36.6953, longitude: 137.2113),
+                .init(key: "일본:간사이", name: "간사이", latitude: 34.6937, longitude: 135.5023),
+                .init(key: "일본:주고쿠", name: "주고쿠", latitude: 34.3853, longitude: 132.4553),
+                .init(key: "일본:시코쿠", name: "시코쿠", latitude: 33.8416, longitude: 132.7657),
+                .init(key: "일본:규슈", name: "규슈", latitude: 33.5902, longitude: 130.4017),
+            ]
+        }
+    }
 }
 
-private struct JapanAtlasRegion: Identifiable, Hashable {
-    let key: String
-    let shortName: String
-    let normalizedPoint: CGPoint
-    var id: String { key }
-
-    static let all: [JapanAtlasRegion] = [
-        .init(key: "일본:홋카이도", shortName: "홋카이도", normalizedPoint: CGPoint(x: 0.75, y: 0.13)),
-        .init(key: "일본:도호쿠", shortName: "도호쿠", normalizedPoint: CGPoint(x: 0.63, y: 0.30)),
-        .init(key: "일본:간토", shortName: "간토", normalizedPoint: CGPoint(x: 0.61, y: 0.49)),
-        .init(key: "일본:주부", shortName: "주부", normalizedPoint: CGPoint(x: 0.49, y: 0.53)),
-        .init(key: "일본:간사이", shortName: "간사이", normalizedPoint: CGPoint(x: 0.38, y: 0.61)),
-        .init(key: "일본:주고쿠", shortName: "주고쿠", normalizedPoint: CGPoint(x: 0.26, y: 0.68)),
-        .init(key: "일본:시코쿠", shortName: "시코쿠", normalizedPoint: CGPoint(x: 0.36, y: 0.73)),
-        .init(key: "일본:규슈", shortName: "규슈", normalizedPoint: CGPoint(x: 0.16, y: 0.82)),
-    ]
+private struct AtlasVisit: Identifiable {
+    let id: String
+    let title: String
+    let date: Date?
+    let photoCount: Int
+    let coordinate: CLLocationCoordinate2D
+    let country: AtlasCountry
 }
 
 struct AtlasView: View {
     @Query(sort: \SavedBoard.createdAt, order: .reverse) private var boards: [SavedBoard]
     @State private var country: AtlasCountry
+    @State private var cameraPosition: MapCameraPosition
+    @State private var selectedVisitID: String?
 
     init(initialCountry: AtlasCountry = .korea) {
         _country = State(initialValue: initialCountry)
+        _cameraPosition = State(initialValue: .region(initialCountry.mapRegion))
     }
 
     private var visited: Set<String> {
@@ -50,16 +108,52 @@ struct AtlasView: View {
         return keys
     }
 
-    private var visibleRegions: [(key: String, name: String, point: CGPoint)] {
-        switch country {
-        case .korea:
-            return KoreaRegion.all.map { ($0.key, $0.shortName, $0.normalizedPoint) }
-        case .japan:
-            return JapanAtlasRegion.all.map { ($0.key, $0.shortName, $0.normalizedPoint) }
+    private var visibleRegions: [AtlasRegionDescriptor] { country.regions }
+    private var visitedCount: Int { visibleRegions.filter { visited.contains($0.key) }.count }
+
+    private var decodedVisits: [AtlasVisit] {
+        boards.flatMap { board -> [AtlasVisit] in
+            guard let payload = try? JSONDecoder().decode(BoardArchivePayload.self, from: board.payloadData) else {
+                return []
+            }
+            let boardCountry = resolvedCountry(from: board.regionKeys)
+            return payload.places.compactMap { place in
+                guard !place.isHidden, CLLocationCoordinate2DIsValid(place.coordinate) else { return nil }
+                let resolvedCountry = boardCountry ?? fallbackCountry(for: place.coordinate)
+                guard let resolvedCountry else { return nil }
+                return AtlasVisit(
+                    id: "\(board.id.uuidString)-\(place.id.uuidString)",
+                    title: place.title,
+                    date: board.date,
+                    photoCount: place.photoCount,
+                    coordinate: place.coordinate,
+                    country: resolvedCountry
+                )
+            }
         }
     }
 
-    private var visitedCount: Int { visibleRegions.filter { visited.contains($0.key) }.count }
+    private var mapVisits: [AtlasVisit] {
+        let actual = decodedVisits.filter { $0.country == country }
+        if !actual.isEmpty { return actual }
+        return visibleRegions
+            .filter { visited.contains($0.key) }
+            .map {
+                AtlasVisit(
+                    id: "region-\($0.key)",
+                    title: $0.name,
+                    date: nil,
+                    photoCount: 0,
+                    coordinate: $0.coordinate,
+                    country: country
+                )
+            }
+    }
+
+    private var selectedVisit: AtlasVisit? {
+        guard let selectedVisitID else { return nil }
+        return mapVisits.first { $0.id == selectedVisitID }
+    }
 
     var body: some View {
         ScrollView {
@@ -67,7 +161,7 @@ struct AtlasView: View {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("아틀라스").font(.largeTitle.weight(.bold))
-                        Text("여행 보드를 저장할수록 두 나라의 지도가 채워집니다")
+                        Text("저장한 보드의 실제 촬영 위치를 지도에서 확인합니다")
                             .font(.subheadline)
                             .foregroundStyle(MRColor.secondaryText)
                     }
@@ -80,10 +174,20 @@ struct AtlasView: View {
                 }
                 .pickerStyle(.segmented)
 
-                VStack(spacing: 16) {
-                    CountryAtlasMap(country: country, regions: visibleRegions, visited: visited)
-                        .frame(height: 390)
+                ActualAtlasMap(
+                    country: country,
+                    visits: mapVisits,
+                    cameraPosition: $cameraPosition,
+                    selectedVisitID: $selectedVisitID
+                )
+                .frame(height: 410)
 
+                if let selectedVisit {
+                    AtlasVisitDetail(visit: selectedVisit)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                VStack(spacing: 13) {
                     HStack {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(country.fullTitle).font(.title3.weight(.bold))
@@ -103,7 +207,7 @@ struct AtlasView: View {
                 VStack(spacing: 12) {
                     MRSectionHeader(title: "지역", subtitle: "저장한 보드의 행정 지역 기준")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                        ForEach(visibleRegions, id: \.key) { region in
+                        ForEach(visibleRegions) { region in
                             HStack(spacing: 9) {
                                 Image(systemName: visited.contains(region.key) ? "mappin.circle.fill" : "circle")
                                     .font(.body.weight(.semibold))
@@ -127,147 +231,163 @@ struct AtlasView: View {
         }
         .background(MRColor.background)
         .toolbar(.hidden, for: .navigationBar)
-        .animation(.easeOut(duration: 0.18), value: country)
+        .animation(.easeOut(duration: 0.18), value: selectedVisitID)
+        .onChange(of: country) { _, newCountry in
+            selectedVisitID = nil
+            withAnimation(.easeOut(duration: 0.28)) {
+                cameraPosition = .region(newCountry.mapRegion)
+            }
+        }
+    }
+
+    private func resolvedCountry(from regionKeys: [String]) -> AtlasCountry? {
+        let hasJapan = regionKeys.contains { $0.hasPrefix("일본:") }
+        let hasKorea = regionKeys.contains { !$0.hasPrefix("일본:") }
+        if hasJapan && !hasKorea { return .japan }
+        if hasKorea && !hasJapan { return .korea }
+        return nil
+    }
+
+    private func fallbackCountry(for coordinate: CLLocationCoordinate2D) -> AtlasCountry? {
+        if coordinate.latitude >= 33.0, coordinate.latitude <= 39.5,
+           coordinate.longitude >= 124.0, coordinate.longitude <= 130.2 {
+            return .korea
+        }
+        if coordinate.latitude >= 24.0, coordinate.latitude <= 46.5,
+           coordinate.longitude >= 122.0, coordinate.longitude <= 146.5 {
+            return .japan
+        }
+        return nil
     }
 }
 
-private struct CountryAtlasMap: View {
+private struct ActualAtlasMap: View {
     let country: AtlasCountry
-    let regions: [(key: String, name: String, point: CGPoint)]
-    let visited: Set<String>
+    let visits: [AtlasVisit]
+    @Binding var cameraPosition: MapCameraPosition
+    @Binding var selectedVisitID: String?
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(cornerRadius: 15, style: .continuous).fill(Color(hex: 0xF2EBDD))
-                AtlasPaperTexture().clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                CountrySilhouette(country: country)
-                    .fill(Color(hex: 0xD9D1C1))
-                    .overlay { CountrySilhouette(country: country).stroke(Color(hex: 0x9E9586).opacity(0.85), lineWidth: 1.2) }
-                    .padding(country == .korea ? 38 : 28)
-                    .shadow(color: .black.opacity(0.08), radius: 5, y: 3)
-
-                ForEach(regions, id: \.key) { region in
-                    VStack(spacing: 3) {
-                        Circle()
-                            .fill(visited.contains(region.key) ? MRColor.accent : Color.white.opacity(0.88))
-                            .overlay { Circle().stroke(visited.contains(region.key) ? MRColor.accent : Color(hex: 0xAFA697), lineWidth: 1) }
-                            .frame(width: visited.contains(region.key) ? 20 : 13, height: visited.contains(region.key) ? 20 : 13)
-                            .shadow(color: visited.contains(region.key) ? MRColor.accent.opacity(0.22) : .clear, radius: 5)
-                        Text(region.name)
-                            .font(.system(size: country == .korea ? 8.5 : 8, weight: .semibold))
-                            .foregroundStyle(visited.contains(region.key) ? MRColor.ink : MRColor.secondaryText)
+        Map(position: $cameraPosition, interactionModes: [.pan, .zoom]) {
+            ForEach(visits) { visit in
+                Annotation(visit.title, coordinate: visit.coordinate, anchor: .bottom) {
+                    Button {
+                        selectedVisitID = visit.id
+                    } label: {
+                        AtlasMapPin(isSelected: selectedVisitID == visit.id)
                     }
-                    .position(x: region.point.x * proxy.size.width, y: region.point.y * proxy.size.height)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(visit.title) 방문 위치")
                 }
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(country.fullTitle) 방문 지역 지도")
-    }
-}
-
-private struct CountrySilhouette: Shape {
-    let country: AtlasCountry
-
-    func path(in rect: CGRect) -> Path {
-        switch country {
-        case .korea: return koreaPath(in: rect)
-        case .japan: return japanPath(in: rect)
+        .mapStyle(.standard(elevation: .flat))
+        .overlay(alignment: .topLeading) {
+            HStack(spacing: 7) {
+                Image(systemName: "camera.fill")
+                Text(visits.isEmpty ? "저장된 촬영 위치 없음" : "촬영 위치 \(visits.count)곳")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(MRColor.primaryText)
+            .padding(.horizontal, 11)
+            .frame(height: 34)
+            .background(.ultraThinMaterial)
+            .clipShape(Capsule())
+            .padding(12)
         }
-    }
-
-    private func koreaPath(in rect: CGRect) -> Path {
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y) }
-        var path = Path()
-        path.move(to: p(0.48, 0.02))
-        path.addCurve(to: p(0.68, 0.18), control1: p(0.60, 0.03), control2: p(0.69, 0.09))
-        path.addCurve(to: p(0.73, 0.42), control1: p(0.72, 0.25), control2: p(0.77, 0.34))
-        path.addCurve(to: p(0.64, 0.62), control1: p(0.74, 0.50), control2: p(0.68, 0.57))
-        path.addCurve(to: p(0.57, 0.83), control1: p(0.63, 0.72), control2: p(0.62, 0.78))
-        path.addCurve(to: p(0.44, 0.91), control1: p(0.53, 0.89), control2: p(0.49, 0.93))
-        path.addCurve(to: p(0.31, 0.78), control1: p(0.38, 0.90), control2: p(0.31, 0.86))
-        path.addCurve(to: p(0.25, 0.55), control1: p(0.26, 0.70), control2: p(0.22, 0.64))
-        path.addCurve(to: p(0.31, 0.36), control1: p(0.25, 0.47), control2: p(0.28, 0.41))
-        path.addCurve(to: p(0.30, 0.17), control1: p(0.35, 0.29), control2: p(0.28, 0.23))
-        path.addCurve(to: p(0.48, 0.02), control1: p(0.34, 0.09), control2: p(0.41, 0.04))
-        path.closeSubpath()
-        path.addEllipse(in: CGRect(x: rect.minX + rect.width * 0.35, y: rect.minY + rect.height * 0.95, width: rect.width * 0.23, height: rect.height * 0.055))
-        return path
-    }
-
-    private func japanPath(in rect: CGRect) -> Path {
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
-            CGPoint(x: rect.minX + rect.width * x, y: rect.minY + rect.height * y)
+        .overlay(alignment: .topTrailing) {
+            Button {
+                selectedVisitID = nil
+                withAnimation(.easeOut(duration: 0.24)) {
+                    cameraPosition = .region(country.mapRegion)
+                }
+            } label: {
+                Image(systemName: "scope")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MRColor.primaryText)
+                    .frame(width: 38, height: 38)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .padding(12)
+            .accessibilityLabel("지도 위치 초기화")
         }
-
-        var path = Path()
-
-        // Hokkaido
-        path.move(to: p(0.68, 0.05))
-        path.addCurve(to: p(0.88, 0.06), control1: p(0.75, 0.01), control2: p(0.84, 0.02))
-        path.addCurve(to: p(0.91, 0.15), control1: p(0.92, 0.09), control2: p(0.92, 0.12))
-        path.addCurve(to: p(0.76, 0.21), control1: p(0.87, 0.19), control2: p(0.81, 0.22))
-        path.addCurve(to: p(0.65, 0.13), control1: p(0.70, 0.20), control2: p(0.65, 0.17))
-        path.addCurve(to: p(0.68, 0.05), control1: p(0.63, 0.09), control2: p(0.65, 0.07))
-        path.closeSubpath()
-
-        // Honshu: one continuous, narrow island chain from Tohoku to Chugoku.
-        path.move(to: p(0.62, 0.20))
-        path.addCurve(to: p(0.70, 0.34), control1: p(0.68, 0.23), control2: p(0.71, 0.28))
-        path.addCurve(to: p(0.67, 0.47), control1: p(0.71, 0.40), control2: p(0.70, 0.44))
-        path.addCurve(to: p(0.56, 0.56), control1: p(0.64, 0.51), control2: p(0.60, 0.54))
-        path.addCurve(to: p(0.42, 0.64), control1: p(0.51, 0.59), control2: p(0.47, 0.62))
-        path.addCurve(to: p(0.23, 0.71), control1: p(0.35, 0.68), control2: p(0.28, 0.71))
-        path.addCurve(to: p(0.18, 0.67), control1: p(0.20, 0.71), control2: p(0.18, 0.69))
-        path.addCurve(to: p(0.34, 0.61), control1: p(0.23, 0.64), control2: p(0.29, 0.63))
-        path.addCurve(to: p(0.47, 0.53), control1: p(0.39, 0.58), control2: p(0.43, 0.56))
-        path.addCurve(to: p(0.57, 0.43), control1: p(0.51, 0.49), control2: p(0.55, 0.46))
-        path.addCurve(to: p(0.58, 0.28), control1: p(0.60, 0.38), control2: p(0.60, 0.33))
-        path.addCurve(to: p(0.62, 0.20), control1: p(0.57, 0.24), control2: p(0.59, 0.21))
-        path.closeSubpath()
-
-        // Shikoku
-        path.move(to: p(0.30, 0.70))
-        path.addCurve(to: p(0.44, 0.70), control1: p(0.35, 0.67), control2: p(0.41, 0.68))
-        path.addCurve(to: p(0.43, 0.76), control1: p(0.46, 0.73), control2: p(0.45, 0.75))
-        path.addCurve(to: p(0.31, 0.77), control1: p(0.38, 0.78), control2: p(0.34, 0.78))
-        path.addCurve(to: p(0.30, 0.70), control1: p(0.29, 0.75), control2: p(0.28, 0.72))
-        path.closeSubpath()
-
-        // Kyushu
-        path.move(to: p(0.12, 0.73))
-        path.addCurve(to: p(0.23, 0.76), control1: p(0.17, 0.71), control2: p(0.21, 0.73))
-        path.addCurve(to: p(0.22, 0.88), control1: p(0.26, 0.81), control2: p(0.25, 0.85))
-        path.addCurve(to: p(0.14, 0.92), control1: p(0.19, 0.91), control2: p(0.16, 0.93))
-        path.addCurve(to: p(0.08, 0.84), control1: p(0.10, 0.90), control2: p(0.08, 0.87))
-        path.addCurve(to: p(0.12, 0.73), control1: p(0.07, 0.79), control2: p(0.09, 0.75))
-        path.closeSubpath()
-
-        // Okinawa marker island
-        path.addEllipse(in: CGRect(
-            x: rect.minX + rect.width * 0.04,
-            y: rect.minY + rect.height * 0.94,
-            width: rect.width * 0.055,
-            height: rect.height * 0.025
-        ))
-        return path
-    }
-}
-
-private struct AtlasPaperTexture: View {
-    var body: some View {
-        Canvas { context, size in
-            let ink = Color(hex: 0xC9C0B1).opacity(0.35)
-            for index in 0..<11 {
-                let y = size.height * CGFloat(index + 1) / 12
-                var path = Path()
-                path.move(to: CGPoint(x: 0, y: y))
-                path.addCurve(to: CGPoint(x: size.width, y: y + CGFloat(index % 3) * 8 - 8), control1: CGPoint(x: size.width * 0.30, y: y - 12), control2: CGPoint(x: size.width * 0.70, y: y + 13))
-                context.stroke(path, with: .color(ink), lineWidth: 0.7)
+        .overlay {
+            if visits.isEmpty {
+                ContentUnavailableView(
+                    "아직 촬영 위치가 없습니다",
+                    systemImage: "mappin.slash",
+                    description: Text("여행 보드를 저장하면 실제 사진 위치가 지도에 표시됩니다.")
+                )
+                .padding(24)
+                .background(.regularMaterial)
             }
         }
-        .allowsHitTesting(false)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(MRColor.border.opacity(0.7), lineWidth: 0.8)
+        }
+        .shadow(color: .black.opacity(0.08), radius: 13, y: 7)
+        .accessibilityLabel("\(country.fullTitle) 실제 촬영 위치 지도")
+    }
+}
+
+private struct AtlasMapPin: View {
+    let isSelected: Bool
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(MRColor.accent)
+                .frame(width: isSelected ? 38 : 32, height: isSelected ? 38 : 32)
+                .shadow(color: .black.opacity(0.22), radius: 5, y: 3)
+            Circle()
+                .stroke(.white.opacity(0.95), lineWidth: 2.5)
+                .frame(width: isSelected ? 38 : 32, height: isSelected ? 38 : 32)
+            Image(systemName: "camera.fill")
+                .font(.system(size: isSelected ? 15 : 12, weight: .bold))
+                .foregroundStyle(.white)
+        }
+        .animation(.easeOut(duration: 0.16), value: isSelected)
+    }
+}
+
+private struct AtlasVisitDetail: View {
+    let visit: AtlasVisit
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(MRColor.accent)
+                .frame(width: 42, height: 42)
+                .background(MRColor.accentSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(visit.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                if let date = visit.date {
+                    Text(date.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption)
+                        .foregroundStyle(MRColor.secondaryText)
+                } else {
+                    Text("방문 지역 대표 위치")
+                        .font(.caption)
+                        .foregroundStyle(MRColor.secondaryText)
+                }
+            }
+            Spacer()
+            if visit.photoCount > 0 {
+                Text("\(visit.photoCount)장")
+                    .font(.subheadline.weight(.bold).monospacedDigit())
+                    .foregroundStyle(MRColor.accent)
+            }
+        }
+        .mrCard(padding: 14, shadow: false)
     }
 }
 
