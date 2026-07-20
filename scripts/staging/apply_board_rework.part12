@@ -1,0 +1,25 @@
+    if "agent/board-artwork-atlas-rework" not in source:
+        source = source.replace("      - agent/full-ui-overhaul\n", "      - agent/full-ui-overhaul\n      - agent/board-artwork-atlas-rework\n")
+    source = source.replace("          capture --screenshot-atlas atlas\n", "          capture --screenshot-atlas atlas-korea\n          capture --screenshot-atlas-japan atlas-japan\n")
+    source = source.replace("          capture --screenshot-board-canvas board-canvas\n", "          capture --screenshot-board-canvas board-poster\n          capture --screenshot-board-feed board-feed\n          capture --screenshot-board-story board-story\n")
+    source = source.replace("name: mapribbon-ui-overhaul-screenshots", "name: mapribbon-board-rework-screenshots")
+    write(path, source)
+
+
+def cleanup() -> None:
+    for relative in ["scripts/apply_board_rework.py", ".github/workflows/apply-board-rework.yml"]:
+        target = ROOT / relative
+        if target.exists():
+            target.unlink()
+
+
+if __name__ == "__main__":
+    download_fixture_assets()
+    patch_board_views()
+    patch_atlas()
+    patch_app_fixture()
+    patch_region_normalizer()
+    patch_tests()
+    patch_ci()
+    cleanup()
+    print("Applied MapRibbon board artwork and atlas rework")
