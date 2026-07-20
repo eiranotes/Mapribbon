@@ -21,27 +21,24 @@ final class PhotoClustererTests: XCTestCase {
         XCTAssertEqual(PhotoClusterer.cluster(assets).count, 2)
     }
 
-
-    func testReferenceRibbonUsesBranchedRouteGraph() {
+    func testRibbonRoutePreservesChronologicalOrder() {
         let edges = BoardRouteLayout.edgePairs(for: 5).map { [$0.0, $0.1] }
-        XCTAssertEqual(edges, [[0, 1], [0, 2], [2, 3], [1, 4], [3, 4]])
+        XCTAssertEqual(edges, [[0, 1], [1, 2], [2, 3], [3, 4]])
     }
 
-    func testReferenceRibbonExtendsSequentiallyAfterFivePlaces() {
-        let edges = BoardRouteLayout.edgePairs(for: 7).map { [$0.0, $0.1] }
-        XCTAssertEqual(edges.suffix(2), [[4, 5], [5, 6]])
+    func testPosterLayoutProvidesFiveDistinctPlacements() {
+        let placements = BoardLayoutEngine.cardPlacements(for: 5, aspectRatio: 3.0 / 4.0)
+        XCTAssertEqual(placements.count, 5)
+        XCTAssertEqual(Set(placements.map { "\($0.center.x)-\($0.center.y)" }).count, 5)
+    }
+
+    func testStoryLayoutUsesLargerCardsThanPoster() {
+        let story = BoardLayoutEngine.cardPlacements(for: 5, aspectRatio: 9.0 / 16.0)
+        let poster = BoardLayoutEngine.cardPlacements(for: 5, aspectRatio: 3.0 / 4.0)
+        XCTAssertGreaterThan(story[0].widthFactor, poster[0].widthFactor)
     }
 
     private func make(id: String, date: Date, latitude: Double, longitude: Double) -> PhotoAssetSnapshot {
-        PhotoAssetSnapshot(
-            id: id,
-            creationDate: date,
-            latitude: latitude,
-            longitude: longitude,
-            pixelWidth: 4_032,
-            pixelHeight: 3_024,
-            isFavorite: false,
-            isScreenshot: false
-        )
+        PhotoAssetSnapshot(id: id, creationDate: date, latitude: latitude, longitude: longitude, pixelWidth: 4_032, pixelHeight: 3_024, isFavorite: false, isScreenshot: false)
     }
 }
