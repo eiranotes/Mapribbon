@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+import json
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def read(path: str) -> str:
+    return (ROOT / path).read_text(encoding="utf-8")
+
+
+def write(path: str, content: str) -> None:
+    target = ROOT / path
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+
+
+def replace_once(path: str, pattern: str, replacement: str, flags: int = re.S) -> None:
+    source = read(path)
+    updated, count = re.subn(pattern, replacement, source, count=1, flags=flags)
+    if count != 1:
+        raise RuntimeError(f"Expected one replacement in {path}, got {count}: {pattern[:80]}")
+    write(path, updated)
+
+
+def download_fixture_assets() -> None:
+    assets = {
+        "FixtureGyeongbokgung": "https://commons.wikimedia.org/wiki/Special:FilePath/Gyeongbokgung_Palace.jpg?width=900",
+        "FixtureGwangjang": "https://commons.wikimedia.org/wiki/Special:FilePath/Gwangjang_Market%2C_Seoul_01.jpg?width=900",
+        "FixtureCityHallCafe": "https://commons.wikimedia.org/wiki/Special:FilePath/Coffee_and_Tea_at_Droptop_Cafe%2C_Seoul.jpg?width=900",
+        "FixtureDeoksugung": "https://commons.wikimedia.org/wiki/Special:FilePath/Road_of_Deoksugung.jpg?width=900",
+        "FixtureHanRiver": "https://commons.wikimedia.org/wiki/Special:FilePath/Seoul_night_skyline_2018.jpg?width=900",
+    }
+    catalog = ROOT / "MapRibbon/Resources/Assets.xcassets"
+    for name, url in assets.items():
+        imageset = catalog / f"{name}.imageset"
+        imageset.mkdir(parents=True, exist_ok=True)
+        filename = f"{name}.jpg"
+        destination = imageset / filename
+        subprocess.run(
+            ["curl", "-L", "--fail", "--retry", "3", "--connect-timeout", "20", "-A", "MapRibbon-CI-Fixture/1.0", url, "-o", str(destination)],
+            check=True,
+        )
+        contents = {
+            "images": [
+                {"filename": filename, "idiom": "universal", "scale": "1x"},
+                {"idiom": "universal", "scale": "2x"},
+                {"idiom": "universal", "scale": "3x"},
+            ],
+            "info": {"author": "xcode", "version": 1},
+            "properties": {"preserves-vector-representation": False},
+        }
+        (imageset / "Contents.json").write_text(json.dumps(contents, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    write(
+        "FIXTURE_PHOTO_ATTRIBUTIONS.md",
+        """# Screenshot fixture photo attributions\n\nThese files are used only for deterministic simulator screenshots and UI regression checks.\n\n- `FixtureGyeongbokgung`: **Gyeongbokgung Palace.jpg**, Janine Dupree, Wikimedia Commons.\n- `FixtureGwangjang`: **Gwangjang Market, Seoul 01.jpg**, Bgag, Wikimedia Commons.\n- `FixtureCityHallCafe`: **Coffee and Tea at Droptop Cafe, Seoul.jpg**, ProjectManhattan, Wikimedia Commons.\n- `FixtureDeoksugung`: **Road of Deoksugung.jpg**, Byung do jung, Wikimedia Commons.\n- `FixtureHanRiver`: **Seoul night skyline 2018.jpg**, Takipoint123, Wikimedia Commons.\n\nThe source pages in Wikimedia Commons contain the applicable Creative Commons terms. These assets are not used as production user content.\n""",
+    )
+
+
+BOARD_RENDERER = r'''struct BoardCanvasView: View {
+    let model: BoardRenderModel
+    let watermark: Bool
+
+    var body: some View {
+        GeometryReader { proxy in
+            premiumBoard(in: proxy.size)
+        }
+        .background(MRColor.cork)
+        .clipped()
+    }
+
+    private func premiumBoard(in size: CGSize) -> some View {
+        let outer = CGRect(origin: .zero, size: size)
+        let boardInset = max(8, size.width * 0.028)
+        let mapRect = outer.insetBy(dx: boardInset, dy: boardInset)
+        let places = model.visiblePlaces.sorted { $0.startDate < $1.startDate }
+        let placements = BoardLayoutEngine.cardPlacements(for: places.count, aspectRatio: size.width / max(1, size.height))
+        let anchors = BoardLayoutEngine.anchorPoints(placements: placements, in: mapRect)
+
+        return ZStack {
+            RoundedRectangle(cornerRadius: size.width * 0.028, style: .continuous)
+                .fill(Color(hex: model.template == .scrapbook ? 0xA87542 : 0x9B673D))
+                .overlay { PremiumCorkTexture().clipShape(RoundedRectangle(cornerRadius: size.width * 0.028, style: .continuous)) }
+                .overlay { RoundedRectangle(cornerRadius: size.width * 0.028).stroke(.black.opacity(0.16), lineWidth: max(1, size.width * 0.002)) }
+
+            paperMap(in: mapRect)
+            routeLayer(anchors: anchors, width: mapRect.width)
+            photoCards(places: places, placements: placements, in: mapRect)
+            pinLayer(anchors: anchors, width: mapRect.width)
+            titleNote(in: mapRect)
+
+            if watermark {
+                Text("Made with MapRibbon")
+                    .font(.system(size: mapRect.width * 0.018, weight: .semibold))
+                    .foregroundStyle(MRColor.ink.opacity(0.42))
+                    .position(x: mapRect.maxX - mapRect.width * 0.13, y: mapRect.maxY - mapRect.height * 0.022)
+            }
+        }
+    }
+
+    private func paperMap(in rect: CGRect) -> some View {
+        ZStack {
+            Image(uiImage: model.mapImage)
+                .resizable()
+                .scaledToFill()
+                .saturation(0.38)
+                .contrast(0.92)
+                .brightness(0.055)
+                .frame(width: rect.width, height: rect.height)
+                .clipped()
+            Color(hex: 0xF2EBDD).opacity(0.38)
+            PremiumPaperGrain().opacity(0.68)
+        }
+        .frame(width: rect.width, height: rect.height)
+        .clipShape(RoundedRectangle(cornerRadius: rect.width * 0.012, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: rect.width * 0.012).stroke(Color.black.opacity(0.13), lineWidth: max(0.8, rect.width * 0.0015)) }
+        .shadow(color: .black.opacity(0.18), radius: rect.width * 0.014, y: rect.width * 0.009)
+        .position(x: rect.midX, y: rect.midY)
+    }
+
+    private func routeLayer(anchors: [CGPoint], width: CGFloat) -> some View {
+        Canvas { context, _ in
+            guard anchors.count > 1 else { return }
+            let ropeWidth = max(3.4, width * 0.0072)
+            for index in 0..<(anchors.count - 1) {
+                let start = anchors[index]
+                let end = anchors[index + 1]
+                let dx = end.x - start.x
+                let bend = min(width * 0.055, abs(dx) * 0.18)
+                let control1 = CGPoint(x: start.x + dx * 0.34, y: start.y + (index.isMultiple(of: 2) ? bend : -bend))
+                let control2 = CGPoint(x: start.x + dx * 0.68, y: end.y + (index.isMultiple(of: 2) ? -bend : bend))
+                var path = Path()
+                path.move(to: start)
+                path.addCurve(to: end, control1: control1, control2: control2)
+                context.stroke(path, with: .color(.black.opacity(0.22)), style: StrokeStyle(lineWidth: ropeWidth * 1.55, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(Color(hex: 0xA52D24)), style: StrokeStyle(lineWidth: ropeWidth, lineCap: .round, lineJoin: .round))
+                context.stroke(path, with: .color(Color(hex: 0xE27867).opacity(0.55)), style: StrokeStyle(lineWidth: max(0.7, ropeWidth * 0.18), lineCap: .round))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private func photoCards(places: [BoardPlace], placements: [BoardCardPlacement], in rect: CGRect) -> some View {
+        ZStack {
+            ForEach(Array(places.enumerated()), id: \.element.id) { index, place in
+                if index < placements.count, let image = model.photoImages[place.representativeAssetIdentifier] {
+                    let placement = placements[index]
+                    PremiumBoardPhotoCard(place: place, image: image, width: rect.width * placement.widthFactor, variant: index)
+                        .rotationEffect(.degrees(placement.rotation))
+                        .position(x: rect.minX + rect.width * placement.center.x, y: rect.minY + rect.height * placement.center.y)
+                }
+            }
+        }
+    }
+
+    private func pinLayer(anchors: [CGPoint], width: CGFloat) -> some View {
+        let assets = ["RoutePinBlue", "RoutePinTeal", "RoutePinYellow", "RoutePinCream", "RoutePinRed", "RoutePinGreen"]
+        let pinWidth = max(20, width * 0.047)
+        return ZStack {
+            ForEach(anchors.indices, id: \.self) { index in
+                Image(assets[index % assets.count])
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: pinWidth, height: pinWidth * 1.56)
+                    .shadow(color: .black.opacity(0.28), radius: pinWidth * 0.10, y: pinWidth * 0.08)
+                    .position(x: anchors[index].x, y: anchors[index].y - pinWidth * 0.47)
+            }
+        }
