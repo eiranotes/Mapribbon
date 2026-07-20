@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - agent/full-ui-overhaul
+      - agent/board-artwork-atlas-rework
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -19,7 +20,7 @@ jobs:
   test:
     name: Build, test, and capture MapRibbon
     runs-on: macos-15
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -72,8 +73,8 @@ jobs:
           if [ "$STATUS" -eq 0 ]; then
             tail -n 100 "$LOG_FILE"
           else
-            grep -nE "error:|BUILD FAILED|TEST FAILED|Testing failed|The following build commands failed" "$LOG_FILE" | tail -n 140 || true
-            tail -n 140 "$LOG_FILE"
+            grep -nE "error:|BUILD FAILED|TEST FAILED|Testing failed|The following build commands failed" "$LOG_FILE" | tail -n 160 || true
+            tail -n 160 "$LOG_FILE"
           fi
           exit 0
 
@@ -85,7 +86,7 @@ jobs:
           UDID="${{ steps.simulator.outputs.udid }}"
           APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
           BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-          OUT="$RUNNER_TEMP/mapribbon-ui-overhaul"
+          OUT="$RUNNER_TEMP/mapribbon-board-rework"
           mkdir -p "$OUT"
 
           xcrun simctl boot "$UDID" 2>/dev/null || true
@@ -106,14 +107,17 @@ jobs:
           capture --screenshot-onboarding onboarding
           capture --screenshot-home home
           capture --screenshot-library library
-          capture --screenshot-atlas atlas
+          capture --screenshot-atlas atlas-korea
+          capture --screenshot-atlas-japan atlas-japan
           capture --screenshot-settings settings
           capture --screenshot-paywall paywall
           capture --screenshot-generation generation
           capture --screenshot-export export
           capture --screenshot-places places
           capture --screenshot-board-editor board-editor
-          capture --screenshot-board-canvas board-canvas
+          capture --screenshot-board-canvas board-poster
+          capture --screenshot-board-feed board-feed
+          capture --screenshot-board-story board-story
 
           {
             echo "device=${{ steps.simulator.outputs.name }}"
@@ -127,8 +131,8 @@ jobs:
         if: steps.xcode.outputs.status == '0'
         uses: actions/upload-artifact@v4
         with:
-          name: mapribbon-ui-overhaul-screenshots
-          path: ${{ runner.temp }}/mapribbon-ui-overhaul
+          name: mapribbon-board-rework-screenshots
+          path: ${{ runner.temp }}/mapribbon-board-rework
           retention-days: 14
           if-no-files-found: error
 
