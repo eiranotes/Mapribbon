@@ -26,38 +26,17 @@ jobs:
         id: patch
         shell: bash
         run: |
-          set +e
-          LOG="$RUNNER_TEMP/pr11-patch.log"
-          {
-            test -f Scripts/apply_pr11_full_review.py.gz.b64 || { echo "patch payload missing"; exit 1; }
-            base64 --decode Scripts/apply_pr11_full_review.py.gz.b64 > "$RUNNER_TEMP/pr11-patch.gz" || { echo "base64 decode failed"; exit 1; }
-            wc -c "$RUNNER_TEMP/pr11-patch.gz"
-            gzip -t "$RUNNER_TEMP/pr11-patch.gz" || { echo "gzip validation failed"; exit 1; }
-            gzip -dc "$RUNNER_TEMP/pr11-patch.gz" > Scripts/apply_pr11_full_review.py
-            python3 Scripts/apply_pr11_full_review.py
-          } > "$LOG" 2>&1
-          STATUS=$?
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
-          cat "$LOG"
-          if [ "$STATUS" -eq 0 ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A
-            git diff --cached --stat
-            git commit -m "fix: complete board quality review follow-ups"
-            git push origin "HEAD:${GITHUB_HEAD_REF}"
-          fi
-          exit 0
+          set -euo pipefail
+          cat Scripts/apply_pr11_full_review.part* > "$RUNNER_TEMP/pr11-patch.b64"
+          echo "87bd06407371fc16f5e6969a75514f6347ee9a3d1b9cd3f5c926819c42eeccfa  $RUNNER_TEMP/pr11-patch.b64" | sha256sum -c -
+          base64 --decode "$RUNNER_TEMP/pr11-patch.b64" > "$RUNNER_TEMP/pr11-patch.gz"
+          gzip -t "$RUNNER_TEMP/pr11-patch.gz"
+          gzip -dc "$RUNNER_TEMP/pr11-patch.gz" > Scripts/apply_pr11_full_review.py
+          python3 Scripts/apply_pr11_full_review.py
 
-      - name: Upload patch diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr11-patch-diagnostics
-          path: ${{ runner.temp }}/pr11-patch.log
-          retention-days: 2
-          if-no-files-found: error
-
-      - name: Fail when patch application fails
-        if: steps.patch.outputs.status != '0'
-        run: exit 1
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --stat
+          git commit -m "fix: complete board quality review follow-ups"
+          git push origin "HEAD:${GITHUB_HEAD_REF}"
