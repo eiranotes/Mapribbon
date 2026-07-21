@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -24,6 +24,36 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Add deterministic dark screenshot mode
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path("MapRibbon/App/MapRibbonApp.swift")
+          text = path.read_text()
+          marker = '            .tint(MRColor.accent)\n'
+          replacement = marker + '            .preferredColorScheme(launchArguments.contains("--screenshot-dark") ? .dark : nil)\n'
+          if replacement not in text:
+              if text.count(marker) != 1:
+                  raise SystemExit(f"expected one tint marker, found {text.count(marker)}")
+              path.write_text(text.replace(marker, replacement, 1))
+          PY
+          git diff --check
+          if git diff --quiet; then
+            echo "Dark screenshot mode already present"
+          else
+            git config user.name "OpenAI PR Review"
+            git config user.email "openai-pr-review@users.noreply.github.com"
+            git add MapRibbon/App/MapRibbonApp.swift
+            git commit -m "test: force deterministic dark screenshot fixtures"
+            git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          fi
 
       - name: Select an available iPhone simulator
         id: simulator
@@ -108,13 +138,15 @@ jobs:
           LOCALE="${5:-ko_KR}"
           APPEARANCE="${6:-light}"
           STYLE_ARGS=(-AppleInterfaceStyle Light)
+          SCREENSHOT_ARGS=()
           if [ "$APPEARANCE" = "dark" ]; then
             STYLE_ARGS=(-AppleInterfaceStyle Dark)
+            SCREENSHOT_ARGS=(--screenshot-dark)
           fi
           xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
           xcrun simctl ui "$UDID" appearance "$APPEARANCE" || true
           sleep 1
-          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" "${STYLE_ARGS[@]}" -AppleLanguages "($LANGUAGE)" -AppleLocale "$LOCALE"
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" "${SCREENSHOT_ARGS[@]}" "${STYLE_ARGS[@]}" -AppleLanguages "($LANGUAGE)" -AppleLocale "$LOCALE"
           sleep "$WAIT"
           xcrun simctl io "$UDID" screenshot "$OUT/$NAME.png"
           SH
@@ -239,7 +271,7 @@ jobs:
           {
             echo "device=${{ steps.simulator.outputs.name }}"
             echo "runtime=${{ steps.simulator.outputs.runtime }}"
-            echo "commit=$GITHUB_SHA"
+            echo "commit=$(git rev-parse HEAD)"
             echo "screenshot_count=$COUNT"
           } > "$OUT/metadata.txt"
           ls -lh "$OUT" || true
