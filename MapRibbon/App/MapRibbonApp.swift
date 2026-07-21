@@ -51,6 +51,7 @@ struct MapRibbonApp: App {
             .environment(store)
             .environment(router)
             .tint(MRColor.accent)
+            .preferredColorScheme(launchArguments.contains("--screenshot-dark") ? .dark : nil)
         }
         .modelContainer(for: SavedBoard.self)
     }

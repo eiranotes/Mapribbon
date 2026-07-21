@@ -14,13 +14,13 @@ concurrency:
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
   test:
     name: Build, capture, and test MapRibbon
     runs-on: macos-15
     timeout-minutes: 45
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -31,7 +31,6 @@ jobs:
         run: |
           set -euo pipefail
           xcodebuild -version
-          xcodebuild -showsdks
           DEVICE_INFO="$(xcrun simctl list devices available -j | python3 -c '
           import json, sys
           payload = json.load(sys.stdin)
@@ -48,6 +47,7 @@ jobs:
               selected = next((d for d in phones if "Pro" in d.get("name", "")), phones[0])
               print(selected["udid"] + "|" + selected["name"] + "|" + runtime)
               raise SystemExit
+          raise SystemExit("No available iPhone simulator")
           ')"
           IFS='|' read -r UDID DEVICE_NAME RUNTIME <<< "$DEVICE_INFO"
           echo "udid=$UDID" >> "$GITHUB_OUTPUT"
@@ -76,122 +76,104 @@ jobs:
           fi
           exit 0
 
-      - name: Prepare screenshot simulator
-        if: steps.build.outputs.status == '0'
-        shell: bash
-        run: |
-          set -euo pipefail
-          UDID="${{ steps.simulator.outputs.udid }}"
-          APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
-          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
-          OUT="$RUNNER_TEMP/mapribbon-ui-overhaul"
-          mkdir -p "$OUT"
-          xcrun simctl boot "$UDID" 2>/dev/null || true
-          xcrun simctl bootstatus "$UDID" -b
-          xcrun simctl ui "$UDID" appearance light || true
-          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState discharging --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
-          xcrun simctl install "$UDID" "$APP_PATH"
-          xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
-          {
-            echo "UDID=$UDID"
-            echo "BUNDLE_ID=$BUNDLE_ID"
-            echo "OUT=$OUT"
-          } > "$RUNNER_TEMP/screenshot.env"
-          cat > "$RUNNER_TEMP/capture-screen.sh" <<'SH'
-          #!/bin/bash
-          set -euo pipefail
-          source "$RUNNER_TEMP/screenshot.env"
-          FLAG="$1"
-          NAME="$2"
-          WAIT="${3:-3}"
-          xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
-          xcrun simctl launch "$UDID" "$BUNDLE_ID" "$FLAG" -AppleLanguages "(ko)" -AppleLocale ko_KR
-          sleep "$WAIT"
-          xcrun simctl io "$UDID" screenshot "$OUT/$NAME.png"
-          SH
-          chmod +x "$RUNNER_TEMP/capture-screen.sh"
-
-      - name: Capture onboarding
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-onboarding onboarding"
-
-      - name: Capture home
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-home home"
-
-      - name: Capture library
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-library library"
-
-      - name: Capture Korea atlas
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-atlas atlas-korea 6"
-
-      - name: Capture Japan atlas
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-atlas-japan atlas-japan 6"
-
-      - name: Capture settings
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-settings settings"
-
-      - name: Capture paywall
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-paywall paywall"
-
-      - name: Capture generation
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-generation generation"
-
-      - name: Capture editor
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-editor board-editor"
-
-      - name: Capture board poster
-        if: steps.build.outputs.status == '0'
-        continue-on-error: true
-        timeout-minutes: 2
-        run: "$RUNNER_TEMP/capture-screen.sh --screenshot-board-canvas board-poster"
-
-      - name: Validate screenshot matrix
+      - name: Capture UI matrix
         id: screenshots
         if: always()
         shell: bash
         run: |
+          set -u
           OUT="$RUNNER_TEMP/mapribbon-ui-overhaul"
-          COUNT="$(find "$OUT" -maxdepth 1 -name '*.png' 2>/dev/null | wc -l | tr -d ' ')"
-          echo "Captured $COUNT of 10 expected screenshots"
-          if [ "$COUNT" -eq 10 ]; then
-            STATUS=0
-          else
+          mkdir -p "$OUT"
+          STATUS=0
+
+          if [ "${{ steps.build.outputs.status }}" != "0" ]; then
+            echo "App build failed; screenshots cannot run"
+            echo "status=1" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          UDID="${{ steps.simulator.outputs.udid }}"
+          APP_PATH="$(find "$RUNNER_TEMP/DerivedData/Build/Products/Debug-iphonesimulator" -maxdepth 1 -name 'MapRibbon.app' -print -quit)"
+          BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP_PATH/Info.plist")"
+
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time 10:41 --batteryState discharging --batteryLevel 100 --wifiBars 3 --cellularBars 4 || true
+          xcrun simctl install "$UDID" "$APP_PATH"
+          xcrun simctl privacy "$UDID" revoke photos "$BUNDLE_ID" || true
+
+          capture() {
+            local flag="$1"
+            local name="$2"
+            local wait_seconds="$3"
+            local language="$4"
+            local locale="$5"
+            local appearance="$6"
+
+            xcrun simctl terminate "$UDID" "$BUNDLE_ID" 2>/dev/null || true
+            xcrun simctl ui "$UDID" appearance "$appearance" || return 1
+            sleep 1
+
+            if [ "$appearance" = "dark" ]; then
+              xcrun simctl launch "$UDID" "$BUNDLE_ID" \
+                "$flag" --screenshot-dark \
+                -AppleInterfaceStyle Dark \
+                -AppleLanguages "($language)" \
+                -AppleLocale "$locale" || return 1
+            else
+              xcrun simctl launch "$UDID" "$BUNDLE_ID" \
+                "$flag" \
+                -AppleInterfaceStyle Light \
+                -AppleLanguages "($language)" \
+                -AppleLocale "$locale" || return 1
+            fi
+
+            sleep "$wait_seconds"
+            xcrun simctl io "$UDID" screenshot "$OUT/$name.png" || return 1
+          }
+
+          while IFS='|' read -r flag name wait_seconds language locale appearance; do
+            [ -z "$flag" ] && continue
+            echo "Capturing $name ($language, $appearance)"
+            if ! capture "$flag" "$name" "$wait_seconds" "$language" "$locale" "$appearance"; then
+              echo "Capture failed: $name"
+              STATUS=1
+            fi
+          done <<'MATRIX'
+          --screenshot-onboarding|onboarding|3|ko|ko_KR|light
+          --screenshot-home|home|3|ko|ko_KR|light
+          --screenshot-library|library|3|ko|ko_KR|light
+          --screenshot-atlas|atlas-korea|6|ko|ko_KR|light
+          --screenshot-atlas-japan|atlas-japan|6|ko|ko_KR|light
+          --screenshot-settings|settings|3|ko|ko_KR|light
+          --screenshot-paywall|paywall|3|ko|ko_KR|light
+          --screenshot-generation|generation|3|ko|ko_KR|light
+          --screenshot-board-editor|board-editor|3|ko|ko_KR|light
+          --screenshot-board-canvas|board-poster|3|ko|ko_KR|light
+          --screenshot-export|export|3|ko|ko_KR|light
+          --screenshot-places|places|3|ko|ko_KR|light
+          --screenshot-board-feed|board-feed|3|ko|ko_KR|light
+          --screenshot-board-story|board-story|3|ko|ko_KR|light
+          --screenshot-board-canvas|board-poster-ja|3|ja|ja_JP|light
+          --screenshot-home|home-dark|3|ko|ko_KR|dark
+          --screenshot-atlas|atlas-korea-dark|6|ko|ko_KR|dark
+          MATRIX
+
+          COUNT="$(find "$OUT" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')"
+          echo "Captured $COUNT of 17 expected screenshots"
+          if [ "$COUNT" -ne 17 ]; then
             STATUS=1
           fi
-          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+
           {
             echo "device=${{ steps.simulator.outputs.name }}"
             echo "runtime=${{ steps.simulator.outputs.runtime }}"
             echo "commit=$GITHUB_SHA"
             echo "screenshot_count=$COUNT"
           } > "$OUT/metadata.txt"
-          ls -lh "$OUT" || true
+          ls -lh "$OUT"
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
 
       - name: Upload UI screenshots
         if: always()
@@ -238,6 +220,14 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Fail when validation fails
-        if: steps.build.outputs.status != '0' || steps.xcode.outputs.status != '0' || steps.screenshots.outputs.status != '0'
-        run: exit 1
+      - name: Enforce validation result
+        if: always()
+        shell: bash
+        run: |
+          BUILD="${{ steps.build.outputs.status }}"
+          SCREENSHOTS="${{ steps.screenshots.outputs.status }}"
+          TESTS="${{ steps.xcode.outputs.status }}"
+          echo "build=$BUILD screenshots=$SCREENSHOTS tests=$TESTS"
+          if [ "$BUILD" != "0" ] || [ "$SCREENSHOTS" != "0" ] || [ "$TESTS" != "0" ]; then
+            exit 1
+          fi

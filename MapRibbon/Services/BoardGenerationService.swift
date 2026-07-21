@@ -368,35 +368,62 @@ enum BoardGenerationError: LocalizedError {
 }
 
 enum RegionNormalizer {
+    private struct Mapping {
+        let aliases: [String]
+        let key: String
+    }
+
+    private static let mappings: [Mapping] = [
+        Mapping(aliases: ["서울", "Seoul"], key: "서울"),
+        Mapping(aliases: ["부산", "Busan"], key: "부산"),
+        Mapping(aliases: ["대구", "Daegu"], key: "대구"),
+        Mapping(aliases: ["인천", "Incheon"], key: "인천"),
+        Mapping(aliases: ["광주", "Gwangju"], key: "광주"),
+        Mapping(aliases: ["대전", "Daejeon"], key: "대전"),
+        Mapping(aliases: ["울산", "Ulsan"], key: "울산"),
+        Mapping(aliases: ["세종", "Sejong"], key: "세종"),
+        Mapping(aliases: ["경기", "Gyeonggi"], key: "경기"),
+        Mapping(aliases: ["강원", "Gangwon"], key: "강원"),
+        Mapping(aliases: ["충청북", "North Chungcheong"], key: "충북"),
+        Mapping(aliases: ["충청남", "South Chungcheong"], key: "충남"),
+        Mapping(aliases: ["전북", "전라북", "North Jeolla"], key: "전북"),
+        Mapping(aliases: ["전남", "전라남", "South Jeolla"], key: "전남"),
+        Mapping(aliases: ["경상북", "North Gyeongsang"], key: "경북"),
+        Mapping(aliases: ["경상남", "South Gyeongsang"], key: "경남"),
+        Mapping(aliases: ["제주", "Jeju"], key: "제주"),
+
+        Mapping(aliases: ["北海道", "Hokkaido"], key: "일본:홋카이도"),
+        Mapping(aliases: ["青森", "Aomori", "岩手", "Iwate", "宮城", "Miyagi", "秋田", "Akita", "山形", "Yamagata", "福島", "Fukushima"], key: "일본:도호쿠"),
+        Mapping(aliases: ["茨城", "Ibaraki", "栃木", "Tochigi", "群馬", "Gunma", "埼玉", "Saitama", "千葉", "Chiba", "東京", "Tokyo", "神奈川", "Kanagawa"], key: "일본:간토"),
+        Mapping(aliases: ["新潟", "Niigata", "富山", "Toyama", "石川", "Ishikawa", "福井", "Fukui", "山梨", "Yamanashi", "長野", "Nagano", "岐阜", "Gifu", "静岡", "Shizuoka", "愛知", "Aichi"], key: "일본:주부"),
+        Mapping(aliases: ["三重", "Mie", "滋賀", "Shiga", "京都", "Kyoto", "大阪", "Osaka", "兵庫", "Hyogo", "奈良", "Nara", "和歌山", "Wakayama"], key: "일본:간사이"),
+        Mapping(aliases: ["鳥取", "Tottori", "島根", "Shimane", "岡山", "Okayama", "広島", "Hiroshima", "山口", "Yamaguchi"], key: "일본:주고쿠"),
+        Mapping(aliases: ["徳島", "Tokushima", "香川", "Kagawa", "愛媛", "Ehime", "高知", "Kochi"], key: "일본:시코쿠"),
+        Mapping(aliases: ["福岡", "Fukuoka", "佐賀", "Saga", "長崎", "Nagasaki", "熊本", "Kumamoto", "大分", "Oita", "Ōita", "宮崎", "Miyazaki", "鹿児島", "Kagoshima", "沖縄", "Okinawa"], key: "일본:규슈")
+    ]
+
     static func key(from value: String?) -> String? {
-        guard let value else { return nil }
-        let mappings: [(String, String)] = [
-            ("서울", "서울"), ("Seoul", "서울"),
-            ("부산", "부산"), ("Busan", "부산"),
-            ("대구", "대구"), ("Daegu", "대구"),
-            ("인천", "인천"), ("Incheon", "인천"),
-            ("광주", "광주"), ("Gwangju", "광주"),
-            ("대전", "대전"), ("Daejeon", "대전"),
-            ("울산", "울산"), ("Ulsan", "울산"),
-            ("세종", "세종"), ("Sejong", "세종"),
-            ("경기", "경기"), ("Gyeonggi", "경기"),
-            ("강원", "강원"), ("Gangwon", "강원"),
-            ("충청북", "충북"), ("North Chungcheong", "충북"),
-            ("충청남", "충남"), ("South Chungcheong", "충남"),
-            ("전북", "전북"), ("전라북", "전북"), ("North Jeolla", "전북"),
-            ("전남", "전남"), ("전라남", "전남"), ("South Jeolla", "전남"),
-            ("경상북", "경북"), ("North Gyeongsang", "경북"),
-            ("경상남", "경남"), ("South Gyeongsang", "경남"),
-            ("제주", "제주"), ("Jeju", "제주"),
-            ("北海道", "일본:홋카이도"), ("Hokkaido", "일본:홋카이도"),
-            ("青森", "일본:도호쿠"), ("岩手", "일본:도호쿠"), ("宮城", "일본:도호쿠"), ("秋田", "일본:도호쿠"), ("山形", "일본:도호쿠"), ("福島", "일본:도호쿠"),
-            ("Tokyo", "일본:간토"), ("東京", "일본:간토"), ("Kanagawa", "일본:간토"), ("神奈川", "일본:간토"), ("Chiba", "일본:간토"), ("千葉", "일본:간토"), ("Saitama", "일본:간토"), ("埼玉", "일본:간토"),
-            ("Aichi", "일본:주부"), ("愛知", "일본:주부"), ("Nagano", "일본:주부"), ("長野", "일본:주부"), ("Shizuoka", "일본:주부"), ("静岡", "일본:주부"), ("Niigata", "일본:주부"), ("新潟", "일본:주부"),
-            ("Osaka", "일본:간사이"), ("大阪", "일본:간사이"), ("Kyoto", "일본:간사이"), ("京都", "일본:간사이"), ("Hyogo", "일본:간사이"), ("兵庫", "일본:간사이"), ("Nara", "일본:간사이"), ("奈良", "일본:간사이"),
-            ("Hiroshima", "일본:주고쿠"), ("広島", "일본:주고쿠"), ("Okayama", "일본:주고쿠"), ("岡山", "일본:주고쿠"),
-            ("Kagawa", "일본:시코쿠"), ("香川", "일본:시코쿠"), ("Ehime", "일본:시코쿠"), ("愛媛", "일본:시코쿠"),
-            ("Fukuoka", "일본:규슈"), ("福岡", "일본:규슈"), ("Kumamoto", "일본:규슈"), ("熊本", "일본:규슈"), ("Nagasaki", "일본:규슈"), ("長崎", "일본:규슈"), ("Okinawa", "일본:규슈"), ("沖縄", "일본:규슈")
-        ]
-        return mappings.first(where: { value.localizedCaseInsensitiveContains($0.0) })?.1
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        let normalizedValue = normalized(value)
+        return mappings.first { mapping in
+            mapping.aliases.contains { normalizedValue.contains(normalized($0)) }
+        }?.key
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .replacingOccurrences(of: "prefecture", with: "")
+            .replacingOccurrences(of: "metropolis", with: "")
+            .replacingOccurrences(of: "province", with: "")
+            .replacingOccurrences(of: "都", with: "")
+            .replacingOccurrences(of: "道", with: "")
+            .replacingOccurrences(of: "府", with: "")
+            .replacingOccurrences(of: "県", with: "")
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "_", with: "")
     }
 }

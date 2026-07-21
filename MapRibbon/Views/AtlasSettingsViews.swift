@@ -23,6 +23,7 @@ enum AtlasCountry: String, CaseIterable, Identifiable {
     var title: String { self == .korea ? "한국" : "일본" }
     var fullTitle: String { self == .korea ? "대한민국" : "일본" }
     var total: Int { regions.count }
+    var regionKeys: [String] { regions.map(\.key) }
 
     var mapRegion: MKCoordinateRegion {
         switch self {
@@ -76,6 +77,16 @@ enum AtlasCountry: String, CaseIterable, Identifiable {
     }
 }
 
+enum AtlasVisitCoverage {
+    static func missingRegionKeys(
+        visited: Set<String>,
+        actual: Set<String>,
+        country: AtlasCountry
+    ) -> [String] {
+        country.regionKeys.filter { visited.contains($0) && !actual.contains($0) }
+    }
+}
+
 private struct AtlasVisit: Identifiable {
     let id: String
     let title: String
@@ -83,6 +94,7 @@ private struct AtlasVisit: Identifiable {
     let photoCount: Int
     let coordinate: CLLocationCoordinate2D
     let country: AtlasCountry
+    let regionKey: String?
 }
 
 struct AtlasView: View {
@@ -127,7 +139,8 @@ struct AtlasView: View {
                     date: board.date,
                     photoCount: place.photoCount,
                     coordinate: place.coordinate,
-                    country: resolvedCountry
+                    country: resolvedCountry,
+                    regionKey: RegionNormalizer.key(from: place.administrativeArea)
                 )
             }
         }
@@ -135,9 +148,16 @@ struct AtlasView: View {
 
     private var mapVisits: [AtlasVisit] {
         let actual = decodedVisits.filter { $0.country == country }
-        if !actual.isEmpty { return actual }
-        return visibleRegions
-            .filter { visited.contains($0.key) }
+        let actualRegionKeys = Set(actual.compactMap(\.regionKey))
+        let fallbackRegionKeys = Set(
+            AtlasVisitCoverage.missingRegionKeys(
+                visited: visited,
+                actual: actualRegionKeys,
+                country: country
+            )
+        )
+        let fallback = visibleRegions
+            .filter { fallbackRegionKeys.contains($0.key) }
             .map {
                 AtlasVisit(
                     id: "region-\($0.key)",
@@ -145,9 +165,11 @@ struct AtlasView: View {
                     date: nil,
                     photoCount: 0,
                     coordinate: $0.coordinate,
-                    country: country
+                    country: country,
+                    regionKey: $0.key
                 )
             }
+        return actual + fallback
     }
 
     private var selectedVisit: AtlasVisit? {
@@ -181,7 +203,7 @@ struct AtlasView: View {
                 .padding(.bottom, 34)
             }
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .toolbar(.hidden, for: .navigationBar)
         .animation(.easeOut(duration: 0.2), value: selectedVisitID)
         .onChange(of: country) { _, newCountry in
@@ -193,13 +215,16 @@ struct AtlasView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                MREyebrow(text: "Atlas — 여행 수집 지도")
                 Text("아틀라스")
-                    .font(.largeTitle.weight(.bold))
+                    .font(MRType.display(31))
+                    .tracking(-0.4)
                 Text("저장한 보드의 실제 촬영 위치")
                     .font(.subheadline)
                     .foregroundStyle(MRColor.secondaryText)
+                    .padding(.top, 2)
             }
             Spacer()
             NavigationLink {
@@ -277,8 +302,9 @@ struct AtlasView: View {
             .padding(.vertical, 8)
             .background(.regularMaterial)
             .clipShape(Capsule())
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            .padding(14)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .padding(.top, 68)
+            .padding(.leading, 14)
             .allowsHitTesting(false)
         }
     }
@@ -287,13 +313,15 @@ struct AtlasView: View {
         HStack(spacing: 16) {
             ZStack {
                 Circle()
-                    .stroke(MRColor.border.opacity(0.6), lineWidth: 7)
+                    .stroke(MRColor.border.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [3, 4]))
+                    .padding(6)
                 Circle()
                     .trim(from: 0, to: Double(visitedCount) / Double(max(1, country.total)))
-                    .stroke(MRColor.mapTeal, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                    .stroke(MRColor.accent, style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6.5, 5]))
                     .rotationEffect(.degrees(-90))
+                    .padding(6)
                 Text("\(Int(Double(visitedCount) / Double(max(1, country.total)) * 100))%")
-                    .font(.caption.weight(.bold).monospacedDigit())
+                    .font(MRType.plate(14, weight: .bold).monospacedDigit())
             }
             .frame(width: 66, height: 66)
 
@@ -472,7 +500,7 @@ struct SettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .navigationTitle("설정")
         .sheet(isPresented: $showingPaywall) { PaywallView() }
         .alert("MapRibbon", isPresented: Binding(
@@ -502,9 +530,11 @@ struct PaywallView: View {
         ScrollView {
             VStack(spacing: 22) {
                 HStack {
-                    VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 5) {
+                        MREyebrow(text: "Full Edition")
                         Text("MapRibbon 전체 기능")
-                            .font(.title2.weight(.bold))
+                            .font(MRType.display(24))
+                            .tracking(-0.3)
                         Text("한 번 구매하고 계속 사용합니다")
                             .font(.subheadline)
                             .foregroundStyle(MRColor.secondaryText)
@@ -555,7 +585,7 @@ struct PaywallView: View {
             }
             .padding(20)
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
     }
 }
 
@@ -566,11 +596,12 @@ private struct PremiumBoardSample: View {
         BoardCanvasView(model: draft.renderModel, watermark: false)
             .aspectRatio(3.0 / 4.0, contentMode: .fit)
             .frame(maxWidth: .infinity)
-            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(Color.black.opacity(0.09), lineWidth: 0.8)
-            }
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .padding(6)
+            .background(MRColor.surface)
+            .clipShape(RoundedRectangle(cornerRadius: MRRadius.card, style: .continuous))
+            .overlay { MRPlateFrame() }
+            .overlay(alignment: .top) { MRPinDot(diameter: 9).offset(y: -3) }
             .shadow(color: .black.opacity(0.15), radius: 14, y: 8)
             .accessibilityHidden(true)
     }

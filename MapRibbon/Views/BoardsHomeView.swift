@@ -27,6 +27,10 @@ struct BoardsHomeView: View {
                 }
 
                 if photoLibrary.canReadLibrary, !photoLibrary.daySummaries.isEmpty {
+                    // 도판과 도판 사이를 실이 잇는다.
+                    MRVerticalStitch()
+                        .padding(.vertical, -18)
+
                     Button {
                         showingAllDates = true
                     } label: {
@@ -47,7 +51,7 @@ struct BoardsHomeView: View {
             }
             .padding(.horizontal, MRSpacing.screen)
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .toolbar(.hidden, for: .navigationBar)
         .task {
             photoLibrary.refreshAuthorization()
@@ -72,19 +76,18 @@ struct BoardsHomeView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("MapRibbon")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(MRColor.accent)
-                    .textCase(.uppercase)
-                    .tracking(1.2)
-                Text("어느 하루를 엮을까요?")
-                    .font(.largeTitle.weight(.bold))
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                MREyebrow(text: "MapRibbon — Day Route Atlas")
+                Text("어느 하루를\n엮을까요?")
+                    .font(MRType.display(31))
+                    .tracking(-0.4)
+                    .lineSpacing(2)
                     .foregroundStyle(MRColor.primaryText)
                 Text("사진의 시간과 장소로 여행 보드를 만듭니다")
                     .font(.subheadline)
                     .foregroundStyle(MRColor.secondaryText)
+                    .padding(.top, 2)
             }
             Spacer()
             NavigationLink {
@@ -96,7 +99,7 @@ struct BoardsHomeView: View {
                     .frame(width: 44, height: 44)
                     .background(MRColor.elevatedSurface)
                     .clipShape(Circle())
-                    .overlay { Circle().stroke(MRColor.border.opacity(0.8), lineWidth: 0.7) }
+                    .overlay { Circle().stroke(MRColor.frameInk.opacity(0.4), lineWidth: 0.9) }
             }
             .buttonStyle(MRPressableStyle())
             .accessibilityLabel("설정")
@@ -129,7 +132,7 @@ struct BoardsHomeView: View {
             }
             .buttonStyle(MRPrimaryButtonStyle())
         }
-        .mrCard(padding: 18, shadow: false)
+        .mrPlate(padding: 18)
     }
 
     private var scanningState: some View {
@@ -146,55 +149,57 @@ struct BoardsHomeView: View {
             }
             MRRouteThread(progress: 0.58)
         }
-        .mrCard(padding: 18)
+        .mrPlate(padding: 18)
     }
 
     private func travelDayStart(_ summary: PhotoDaySummary) -> some View {
-        Button {
-            selectedSummary = summary
-        } label: {
-            VStack(alignment: .leading, spacing: 17) {
-                HStack(alignment: .firstTextBaseline) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("추천 여행일")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(MRColor.accent)
-                            .textCase(.uppercase)
-                            .tracking(0.8)
-                        Text(summary.date.mrDayTitle)
-                            .font(.title2.weight(.bold))
-                            .foregroundStyle(MRColor.primaryText)
-                    }
-                    Spacer()
-                    Text("\(summary.photoCount)장 · 약 \(summary.estimatedPlaceCount)곳")
-                        .font(.footnote.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(MRColor.secondaryText)
-                }
-
-                RoutePreviewStrip(identifiers: Array(summary.assets.prefix(3).map(\.id)))
-
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("이 하루로 보드 만들기")
-                            .font(.headline)
-                            .foregroundStyle(MRColor.primaryText)
-                        Text("사진 순서와 지도를 자동으로 엮습니다")
-                            .font(.footnote)
+        VStack(spacing: 0) {
+            Button {
+                selectedSummary = summary
+            } label: {
+                VStack(alignment: .leading, spacing: 17) {
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 5) {
+                            MREyebrow(text: "Field Day — 추천 여행일")
+                            Text(summary.date.mrDayTitle)
+                                .font(MRType.plate(23, weight: .bold))
+                                .foregroundStyle(MRColor.primaryText)
+                        }
+                        Spacer()
+                        Text("\(summary.photoCount)장 · 약 \(summary.estimatedPlaceCount)곳")
+                            .font(MRType.plate(13).monospacedDigit())
                             .foregroundStyle(MRColor.secondaryText)
                     }
-                    Spacer()
-                    Image(systemName: "arrow.right")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(MRColor.accent)
-                        .clipShape(Circle())
+
+                    RoutePreviewStrip(identifiers: Array(summary.assets.prefix(3).map(\.id)))
+
+                    HStack {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("이 하루로 보드 만들기")
+                                .font(.headline)
+                                .foregroundStyle(MRColor.primaryText)
+                            Text("사진 순서와 지도를 자동으로 엮습니다")
+                                .font(.footnote)
+                                .foregroundStyle(MRColor.secondaryText)
+                        }
+                        Spacer()
+                        Image(systemName: "arrow.right")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .frame(width: 42, height: 42)
+                            .background(MRColor.accent)
+                            .clipShape(Circle())
+                    }
                 }
+                .contentShape(Rectangle())
             }
-            .contentShape(Rectangle())
+            .buttonStyle(MRPressableStyle())
+            .mrPlate(padding: 18)
+            .overlay(alignment: .top) {
+                MRPinDot()
+                    .offset(y: -4)
+            }
         }
-        .buttonStyle(MRPressableStyle())
-        .mrCard(padding: 18, shadow: true)
     }
 
     private var noPhotosState: some View {
@@ -209,7 +214,7 @@ struct BoardsHomeView: View {
                 .foregroundStyle(MRColor.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .mrCard(padding: 18)
+        .mrPlate(padding: 18)
     }
 
     private var recentBoards: some View {
@@ -296,11 +301,9 @@ struct BoardLibraryView: View {
                         VStack(alignment: .leading, spacing: 14) {
                             HStack(spacing: 10) {
                                 Text(month)
-                                    .font(.headline.weight(.bold).monospacedDigit())
+                                    .font(MRType.plate(16, weight: .bold).monospacedDigit())
                                     .foregroundStyle(MRColor.primaryText)
-                                Rectangle()
-                                    .fill(MRColor.border)
-                                    .frame(height: 0.7)
+                                MRStitch(color: MRColor.frameInk.opacity(0.4))
                             }
 
                             LazyVGrid(columns: columns, alignment: .leading, spacing: 22) {
@@ -328,18 +331,22 @@ struct BoardLibraryView: View {
             .padding(.horizontal, MRSpacing.screen)
             .padding(.bottom, 40)
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .toolbar(.hidden, for: .navigationBar)
     }
 
     private var libraryHeader: some View {
-        HStack(alignment: .center) {
-            VStack(alignment: .leading, spacing: 5) {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                MREyebrow(text: "Archive — 여행 도판집")
                 Text("보관함")
-                    .font(.largeTitle.weight(.bold))
+                    .font(MRType.display(31))
+                    .tracking(-0.4)
+                    .foregroundStyle(MRColor.primaryText)
                 Text("완성한 여행 보드를 날짜별로 모았습니다")
                     .font(.subheadline)
                     .foregroundStyle(MRColor.secondaryText)
+                    .padding(.top, 2)
             }
             Spacer()
             NavigationLink {
@@ -393,10 +400,11 @@ private struct BoardPosterCard: View {
             .frame(maxWidth: .infinity)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(Color.black.opacity(0.08), lineWidth: 0.7)
-            }
+            .padding(4)
+            .background(MRColor.elevatedSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay { MRPlateFrame(cornerRadius: 9) }
+            .overlay(alignment: .top) { MRPinDot(diameter: 9).offset(y: -3) }
             .shadow(color: .black.opacity(0.14), radius: 8, y: 5)
 
             Text(board.title)
@@ -404,7 +412,7 @@ private struct BoardPosterCard: View {
                 .foregroundStyle(MRColor.primaryText)
                 .lineLimit(1)
             Text("\(board.date.mrDayTitle) · \(board.photoCount)장")
-                .font(.caption.monospacedDigit())
+                .font(MRType.plate(11).monospacedDigit())
                 .foregroundStyle(MRColor.secondaryText)
                 .lineLimit(1)
         }

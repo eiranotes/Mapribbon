@@ -30,7 +30,7 @@ struct GenerationFlowView: View {
                     GenerationProgressView(step: step, progress: progress)
                 }
             }
-            .background(MRColor.background.ignoresSafeArea())
+            .background(MRScreenBackground())
             .toolbar {
                 if draft == nil && errorMessage == nil {
                     ToolbarItem(placement: .topBarLeading) {
@@ -60,16 +60,19 @@ struct GenerationProgressView: View {
     let progress: Double
 
     var body: some View {
-        VStack(spacing: 26) {
+        VStack(spacing: 28) {
             Spacer()
-            MRLoadingRing(progress: progress)
-            VStack(spacing: 7) {
-                Text("보드 생성 중")
-                    .font(.title2.weight(.bold))
+            VStack(spacing: 9) {
+                MREyebrow(text: "Day Route — Weaving")
+                Text("하루를 엮는 중")
+                    .font(MRType.display(27))
+                    .foregroundStyle(MRColor.primaryText)
                 Text(step.title)
                     .font(.subheadline)
                     .foregroundStyle(MRColor.secondaryText)
             }
+            MRRouteProgress(progress: progress)
+                .padding(.horizontal, 34)
             VStack(alignment: .leading, spacing: 13) {
                 ForEach(GenerationStep.allCases) { item in
                     HStack(spacing: 10) {
@@ -82,7 +85,7 @@ struct GenerationProgressView: View {
                     }
                 }
             }
-            .mrCard(padding: 18, shadow: false)
+            .mrPlate(padding: 18)
             .padding(.horizontal, 28)
             Spacer()
             Text("사진 원본은 기기 밖으로 전송되지 않습니다.")
@@ -130,16 +133,46 @@ struct BoardEditorView: View {
     @AppStorage("freeExportConsumed") private var freeExportConsumed = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            BoardCanvasView(model: draft.renderModel, watermark: !store.isUnlocked)
-                .aspectRatio(3.0 / 4.0, contentMode: .fit)
-                .frame(maxWidth: .infinity, alignment: .top)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: .black.opacity(0.13), radius: 15, y: 8)
+        GeometryReader { proxy in
+            let availableWidth = max(180, proxy.size.width - 28)
+            let heightConstrainedWidth = max(180, (proxy.size.height - 64) * 0.75)
+            let boardWidth = min(availableWidth, heightConstrainedWidth)
+            let visiblePlaces = draft.places.filter { !$0.isHidden }
+            let photoCount = visiblePlaces.reduce(0) { $0 + $1.photoCount }
 
-            Spacer(minLength: 0)
+            VStack(spacing: 12) {
+                Spacer(minLength: 8)
+
+                BoardCanvasView(model: draft.renderModel, watermark: !store.isUnlocked)
+                    .frame(width: boardWidth, height: boardWidth * 4.0 / 3.0)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay { MRPlateFrame(cornerRadius: 16) }
+                    .shadow(color: .black.opacity(0.13), radius: 15, y: 8)
+
+                HStack(spacing: 10) {
+                    Label(draft.template.title, systemImage: draft.template.symbolName)
+                    Spacer(minLength: 8)
+                    Text("\(visiblePlaces.count)곳 · 사진 \(photoCount)장")
+                        .monospacedDigit()
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(MRColor.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+                .padding(.horizontal, 12)
+                .frame(width: boardWidth, height: 40)
+                .background(MRColor.surface.opacity(0.96))
+                .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .stroke(MRColor.frameInk.opacity(0.32), lineWidth: 0.8)
+                }
+
+                Spacer(minLength: 8)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .background(MRColor.background.ignoresSafeArea())
+        .background(MRScreenBackground())
         .navigationTitle("보드 편집")
         .navigationBarTitleDisplayMode(.inline)
         .navigationBarBackButtonHidden(true)
@@ -338,7 +371,7 @@ struct BoardEditorView: View {
 
         let beforeBoards = (try? modelContext.fetch(FetchDescriptor<SavedBoard>())) ?? []
         let previouslyVisited = Set(beforeBoards.flatMap(\.regionKeys))
-        let regions = Array(Set(draft.places.compactMap { RegionNormalizer.key(from: $0.administrativeArea) })).sorted()
+        let regions = BoardRegionSummary.regionKeys(from: draft.places)
         let regionJSON = String(data: (try? JSONEncoder().encode(regions)) ?? Data("[]".utf8), encoding: .utf8) ?? "[]"
         let identifier = draft.id
         let descriptor = FetchDescriptor<SavedBoard>(predicate: #Predicate { $0.id == identifier })
@@ -371,7 +404,7 @@ struct BoardEditorView: View {
 
         let afterBoards = (try? modelContext.fetch(FetchDescriptor<SavedBoard>())) ?? []
         let visited = Set(afterBoards.flatMap(\.regionKeys))
-        guard let primaryRegion = regions.first else { return nil }
+        guard let primaryRegion = BoardRegionSummary.primaryRegion(from: draft.places) else { return nil }
         let regionBoardCount = afterBoards.filter { $0.regionKeys.contains(primaryRegion) }.count
         let totalRegions = primaryRegion.hasPrefix("일본:") ? 8 : KoreaRegion.all.count
         return BoardSaveOutcome(
@@ -381,6 +414,20 @@ struct BoardEditorView: View {
             totalRegionCount: totalRegions,
             isNewRegion: !previouslyVisited.contains(primaryRegion)
         )
+    }
+}
+
+enum BoardRegionSummary {
+    static func regionKeys(from places: [BoardPlace]) -> [String] {
+        var seen = Set<String>()
+        return places
+            .filter { !$0.isHidden }
+            .compactMap { RegionNormalizer.key(from: $0.administrativeArea) }
+            .filter { seen.insert($0).inserted }
+    }
+
+    static func primaryRegion(from places: [BoardPlace]) -> String? {
+        regionKeys(from: places).first
     }
 }
 
@@ -438,14 +485,17 @@ private struct BoardSaveToast: View {
                 Button("아틀라스 보기", action: onAtlas)
                     .font(.caption.weight(.bold))
                     .foregroundStyle(MRColor.accent)
-            } else {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(MRColor.secondaryText)
-                }
-                .accessibilityLabel("닫기")
             }
+
+            Button(action: onDismiss) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(MRColor.secondaryText)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("닫기")
         }
         .padding(.horizontal, 15)
         .padding(.vertical, 13)
@@ -1677,7 +1727,7 @@ struct SavedBoardDetailView: View {
             }
             .padding(20)
         }
-        .background(MRColor.background)
+        .background(MRScreenBackground())
         .navigationTitle(board.title)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showingActivity) {
